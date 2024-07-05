@@ -14,10 +14,11 @@ import { Response } from 'express'
 import { Role } from '@prisma/client'
 import { UserService } from './user.service'
 import { Roles } from 'src/jwt/role.decorator'
-import { ApiBearerAuth } from '@nestjs/swagger'
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
 import { FetchRatingAndReviewsDTO, RatingDTO } from './dto/rate.dto'
 
+@ApiTags("User")
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) { }
