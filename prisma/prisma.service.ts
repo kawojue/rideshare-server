@@ -28,13 +28,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             }
         })
 
-        if (Date.now() > decoded.iat) {
-            return {
-                isAbleToUseBiometric: false,
-                reason: "Invalid Token"
-            }
-        }
-
         const profile = await this.getProfile(userId)
 
         if (!user || !profile) {
@@ -45,6 +38,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             return {
                 isAbleToUseBiometric: false,
                 reason: "Biometric is not activated"
+            }
+        }
+
+        console.log({
+            iat: decoded.iat,
+            time: new Date(user.lastLoggedInAt).getTime() / 1000
+        })
+
+        if ((new Date(user.lastLoggedInAt).getTime() / 1000) > decoded.exp) {
+            return {
+                isAbleToUseBiometric: false,
+                reason: "Invalid Token"
             }
         }
 
@@ -87,19 +92,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         })
     }
 
-    // async getTotalRating(userId: string) {
-    //     const ratings = await this.rating.findMany({
-    //         where: { targetUserId: userId },
-    //         select: { point: true }
-    //     })
+    async getTotalRating(userId: string) {
+        const ratings = await this.rating.findMany({
+            where: { targetUserId: userId },
+            select: { point: true }
+        })
 
-    //     if (ratings.length === 0) return 0
+        if (ratings.length === 0) return 0
 
-    //     const totalRating = ratings.reduce((sum, rating) => sum + rating.point, 0)
-    //     const averageRating = totalRating / ratings.length
+        const totalRating = ratings.reduce((sum, rating) => sum + rating.point, 0)
+        const averageRating = totalRating / ratings.length
 
-    //     const scaledRating = (averageRating / 5) * 4 + 1
+        const scaledRating = (averageRating / 5) * 4 + 1
 
-    //     return scaledRating
-    // }
+        return scaledRating
+    }
 }

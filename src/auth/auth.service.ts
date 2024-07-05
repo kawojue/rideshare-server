@@ -150,7 +150,7 @@ export class AuthService {
             return this.response.sendError(res, StatusCodes.NotFound, "Account not found")
         }
 
-        const checkings = await this.prisma.biometricCheck(decoded.sub, 'Login')
+        const checkings = await this.prisma.biometricCheck(decoded, 'Login')
 
         if (!checkings.isAbleToUseBiometric) {
             return this.response.sendError(res, StatusCodes.Unauthorized, checkings.reason)

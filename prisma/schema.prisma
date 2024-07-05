@@ -69,7 +69,7 @@ model Modmin {
 model Rating {
   id           String   @id @default(uuid()) @db.Uuid
   point        Float
-  review       String
+  review       String?
   target       User     @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
   targetUserId String   @db.Uuid
   rater        User     @relation("RaterUser", fields: [raterUserId], references: [id], onDelete: Cascade)

@@ -80,7 +80,7 @@ CREATE TABLE "Modmin" (
 CREATE TABLE "Rating" (
     "id" UUID NOT NULL,
     "point" DOUBLE PRECISION NOT NULL,
-    "review" TEXT NOT NULL,
+    "review" TEXT,
     "targetUserId" UUID NOT NULL,
     "raterUserId" UUID NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
