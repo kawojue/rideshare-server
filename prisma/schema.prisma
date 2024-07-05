@@ -52,11 +52,9 @@ model Totp {
   totp        String?
   totp_expiry DateTime?
   user        User      @relation(references: [id], fields: [userId])
-  userId      String    @unique
+  userId      String    @unique @db.Uuid
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-
-  @@unique([userId, totp])
 }
 
 model Driver {

@@ -229,7 +229,9 @@ export class AuthService {
             }
         })
 
-        this.response.sendSuccess(res, StatusCodes.Created, "Successful. Verify your email")
+        this.response.sendSuccess(res, StatusCodes.Created, {
+            message: "Successful. Verify your email"
+        })
     }
 
     async verifyOtp(res: Response, { otp }: OTPDTO) {
