@@ -15,7 +15,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         await this.$disconnect()
     }
 
-    async biometricCheck(userId: string, type: 'Login' | 'Tx') {
+    async biometricCheck(decoded: any, type: 'Login' | 'Tx') {
+        const userId = decoded.sub
+
         const user = await this.user.findUnique({
             where: { id: userId },
             select: {
@@ -25,6 +27,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
                 lastUsedCredentialAt: true,
             }
         })
+
+        if (Date.now() > decoded.iat) {
+            return {
+                isAbleToUseBiometric: false,
+                reason: "Invalid Token"
+            }
+        }
 
         const profile = await this.getProfile(userId)
 

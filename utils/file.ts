@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto'
-import { StatusCodes } from 'enums/StatusCodes'
+import { StatusCodes } from 'enums/statusCodes'
 
 export const getFileExtension = (file: Express.Multer.File | string) => {
     let mimetype: string
