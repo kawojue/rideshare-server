@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URI")
+}
+
+model User {
+  id                       String    @id @default(uuid()) @db.Uuid
+  fullname                 String
+  status                   Status    @default(ACTIVE)
+  provider                 Provider
+  email                    String    @unique
+  phone                    String    @unique
+  provider_id              String?   @unique
+  password                 String?
+  role                     Role
+  refresh_token            String?
+  totp                     Totp?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  lastUsedBiometricAt      DateTime?
+  lastUsedCredentialAt     DateTime?
+  lastLoggedInAt           DateTime?
+  raters                   Rating[]  @relation("RaterUser")
+  ratings                  Rating[]  @relation("TargetUser")
+  hasCompletedProfileSetup Boolean   @default(false)
+  lastPasswordChanged      DateTime  @default(now())
+  profile                  Profile?
+
+  @@index([refresh_token])
+}
+
+model Profile {
+  id             String    @id @default(uuid()) @db.Uuid
+  avatar         Json?
+  gender         Gender
+  email_verified Boolean   @default(false)
+  pin            String?
+  lastPinChanged DateTime?
+  biometric      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String    @unique @db.Uuid
+}
+
+model Totp {
+  id          String    @id @default(uuid()) @db.Uuid
+  totp        String?
+  totp_expiry DateTime?
+  user        User      @relation(references: [id], fields: [userId])
+  userId      String    @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, totp])
+}
+
+model Driver {
+  id String @id @default(uuid()) @db.Uuid
+}
+
+model Modmin {
+  id     String @id @default(uuid()) @db.Uuid
+  status Status @default(ACTIVE)
+}
+
+model Rating {
+  id           String   @id @default(uuid()) @db.Uuid
+  point        Float
+  review       String
+  target       User     @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  targetUserId String   @db.Uuid
+  rater        User     @relation("RaterUser", fields: [raterUserId], references: [id], onDelete: Cascade)
+  raterUserId  String   @db.Uuid
+  createdAt    DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  DRIVER
+  PASSENGER
+}
+
+enum Gender {
+  Male
+  Female
+}
+
+enum Provider {
+  Local
+  Google
+}
+
+enum Status {
+  ACTIVE
+  SUSPENDED
+}
