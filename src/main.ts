@@ -17,6 +17,7 @@ async function bootstrap() {
       'http://localhost:3000',
       'http://localhost:5173',
       `http://localhost:${PORT}`,
+      'https://rideshare-server.onrender.com',
     ],
     credentials: true,
     optionsSuccessStatus: 200,
@@ -40,6 +41,7 @@ async function bootstrap() {
   const swaggerOptions = new DocumentBuilder()
     .setTitle('RideShare API')
     .setVersion('1.7.2')
+    .addServer(`https://rideshare-server.onrender.com`, 'Staging')
     .addServer(`http://localhost:${PORT}`, 'Local')
     .addBearerAuth()
     .build()
