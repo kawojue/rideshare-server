@@ -100,6 +100,13 @@ export class SignupDTO extends EmailDTO {
     @IsNotEmpty()
     @IsEnum(Gender)
     gender: Gender
+
+    @ApiProperty({
+        example: 'My house address'
+    })
+    @IsString()
+    @IsNotEmpty()
+    address: string
 }
 
 export class BiometricLoginDTO {
@@ -169,4 +176,18 @@ export class PinDTO {
     })
     @IsOptional()
     otp: string
+}
+
+export class EmergencyContractDTO {
+    @IsString()
+    @IsNotEmpty()
+
+    name: string
+
+    @ApiProperty({
+        example: '08131911964'
+    })
+    @IsString()
+    @IsNotEmpty()
+    phone: string
 }

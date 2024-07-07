@@ -14,7 +14,7 @@ interface IGenOTP {
     totp_expiry: Date
 }
 
-type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER'
+type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'MODERATOR'
 type Status = 'ACTIVE' | 'SUSPENDED'
 
 interface ExpressUser extends Express.User {

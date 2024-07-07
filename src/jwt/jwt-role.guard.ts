@@ -37,7 +37,7 @@ export class JwtRoleAuthGuard extends AuthGuard('jwt') {
             })
 
             const userOrAdmin = await (this.prisma[
-                decoded.role === 'ADMIN' ? 'modmin' : 'user'
+                (decoded.role === 'ADMIN' || decoded.role === 'MODERATOR') ? 'modmin' : 'user'
             ] as any).findFirst({
                 where: { id: decoded.sub, status: decoded.status },
             })

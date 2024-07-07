@@ -1,10 +1,10 @@
 import {
   Get,
-  Post,
   Put,
   Req,
   Res,
   Body,
+  Post,
   Patch,
   UseGuards,
   Controller,
@@ -20,6 +20,7 @@ import {
   ResetPasswordDTO,
   UpdatePasswordDTO,
   BiometricLoginDTO,
+  EmergencyContractDTO,
 } from './dto/auth.dto'
 import { Role } from '@prisma/client'
 import { Request, Response } from 'express'
@@ -133,5 +134,17 @@ export class AuthController {
     @UploadedFile() file: Express.Multer.File
   ) {
     await this.authService.uploadAvatar(res, file, req.user)
+  }
+
+  @ApiBearerAuth()
+  @Put('/emergency-contact')
+  @UseGuards(JwtRoleAuthGuard)
+  @Roles(Role.DRIVER, Role.PASSENGER)
+  async emergencyContact(
+    @Req() req: IRequest,
+    @Res() res: Response,
+    @Body() body: EmergencyContractDTO,
+  ) {
+    await this.authService.emergencyContact(res, req.user, body)
   }
 }

@@ -7,6 +7,7 @@ import {
     ResetPasswordDTO,
     UpdatePasswordDTO,
     BiometricLoginDTO,
+    EmergencyContractDTO,
 } from './dto/auth.dto'
 import { Response } from 'express'
 import { JwtService } from '@nestjs/jwt'
@@ -63,6 +64,15 @@ export class AuthService {
                     { email: { equals: email, mode: 'insensitive' } },
                     { provider_id: { equals: proverId, mode: 'insensitive' } },
                 ]
+            },
+            include: {
+                profile: {
+                    select: {
+                        avatar: true,
+                        gender: true,
+                        biometric: true,
+                    }
+                }
             }
         })
 
@@ -78,12 +88,16 @@ export class AuthService {
 
         const access_token = await this.updateLoginState(payload, 'lastUsedCredentialAt')
 
+        const setup = await this.prisma.profileSetup(user.id)
+
         return {
             access_token,
             data: {
+                setup,
+                id: user.id,
                 role: user.role,
+                profile: user.profile,
                 fullname: user.fullname,
-                hasCompletedProfileSetup: user.hasCompletedProfileSetup,
             }
         }
     }
@@ -98,6 +112,16 @@ export class AuthService {
                     { email: { equals: email, mode: 'insensitive' } },
                     { phone: { equals: phone, mode: 'insensitive' } },
                 ]
+            },
+            include: {
+                profile: {
+                    select: {
+                        avatar: true,
+                        gender: true,
+                        biometric: true,
+                        email_verified: true,
+                    }
+                }
             }
         })
 
@@ -122,12 +146,16 @@ export class AuthService {
 
         const access_token = await this.updateLoginState(payload, 'lastUsedCredentialAt')
 
+        const setup = await this.prisma.profileSetup(user.id)
+
         this.response.sendSuccess(res, StatusCodes.OK, {
             access_token,
             data: {
+                setup,
+                id: user.id,
                 role: user.role,
+                profile: user.profile,
                 fullname: user.fullname,
-                hasCompletedProfileSetup: user.hasCompletedProfileSetup,
             }
         })
     }
@@ -143,7 +171,17 @@ export class AuthService {
         }
 
         const user = await this.prisma.user.findUnique({
-            where: { id: decoded.sub }
+            where: { id: decoded.sub },
+            include: {
+                profile: {
+                    select: {
+                        avatar: true,
+                        gender: true,
+                        biometric: true,
+                        email_verified: true,
+                    }
+                }
+            }
         })
 
         if (!user) {
@@ -164,18 +202,23 @@ export class AuthService {
 
         const access_token = await this.updateLoginState(payload, 'lastUsedBiometricAt')
 
+        const setup = await this.prisma.profileSetup(user.id)
+
         this.response.sendSuccess(res, StatusCodes.OK, {
             access_token,
             data: {
+                setup,
+                id: user.id,
                 role: user.role,
+                profile: user.profile,
                 fullname: user.fullname,
-                hasCompletedProfileSetup: user.hasCompletedProfileSetup,
             }
         })
     }
 
     async signup(res: Response, {
-        as, email, password, phone, gender, fullname
+        gender, fullname, address,
+        as, email, password, phone,
     }: SignupDTO) {
         phone = normalizePhoneNumber(phone)
 
@@ -197,9 +240,8 @@ export class AuthService {
         const user = await this.prisma.user.create({
             data: {
                 fullname, provider: 'Local',
-                profile: { create: { gender } },
                 email, phone, role: as, password,
-                hasCompletedProfileSetup: as === "PASSENGER" ? true : false,
+                profile: { create: { gender, address } },
             }
         })
 
@@ -550,5 +592,25 @@ export class AuthService {
         })
 
         this.response.sendSuccess(res, StatusCodes.OK, { data: newProfile })
+    }
+
+    async emergencyContact(
+        res: Response,
+        { sub: userId }: ExpressUser,
+        { name, phone }: EmergencyContractDTO
+    ) {
+        phone = normalizePhoneNumber(phone)
+        const profile = await this.prisma.getProfile(userId)
+
+        const contact = await this.prisma.emergencyContact.upsert({
+            where: { profileId: profile.id },
+            create: {
+                name, phone,
+                profile: { connect: { id: profile.id } }
+            },
+            update: { name, phone }
+        })
+
+        this.response.sendSuccess(res, StatusCodes.OK, { data: contact })
     }
 }

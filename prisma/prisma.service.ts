@@ -92,6 +92,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         })
     }
 
+    async profileSetup(userId: string) {
+        const profile = await this.getProfile(userId)
+
+        const emergencyContact = await this.emergencyContact.findUnique({
+            where: { profileId: profile.id }
+        })
+
+        return {
+            hasCreatedTransactionPin: profile.pin !== null,
+            hasAddedEmergencyContact: emergencyContact !== null,
+        }
+    }
+
     async getTotalRating(userId: string) {
         const ratings = await this.rating.findMany({
             where: { targetUserId: userId },
