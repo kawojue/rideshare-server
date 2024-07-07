@@ -1,4 +1,16 @@
 import {
+  OTPDTO,
+  PinDTO,
+  EmailDTO,
+  SigninDTO,
+  SignupDTO,
+  VerificationDTO,
+  ResetPasswordDTO,
+  UpdatePasswordDTO,
+  BiometricLoginDTO,
+  EmergencyContractDTO,
+} from './dto/auth.dto'
+import {
   Get,
   Put,
   Req,
@@ -12,16 +24,11 @@ import {
   UseInterceptors,
 } from '@nestjs/common'
 import {
-  OTPDTO,
-  PinDTO,
-  EmailDTO,
-  SigninDTO,
-  SignupDTO,
-  ResetPasswordDTO,
-  UpdatePasswordDTO,
-  BiometricLoginDTO,
-  EmergencyContractDTO,
-} from './dto/auth.dto'
+  ApiTags,
+  ApiConsumes,
+  ApiOperation,
+  ApiBearerAuth,
+} from '@nestjs/swagger'
 import { Role } from '@prisma/client'
 import { Request, Response } from 'express'
 import { AuthService } from './auth.service'
@@ -31,7 +38,6 @@ import { ResponseService } from 'libs/response.service'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { GoogleAuthGuard } from 'src/jwt/google-auth.guard'
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger'
 
 @ApiTags("Auth")
 @Controller('auth')
@@ -146,5 +152,21 @@ export class AuthController {
     @Body() body: EmergencyContractDTO,
   ) {
     await this.authService.emergencyContact(res, req.user, body)
+  }
+
+  @ApiBearerAuth()
+  @Roles(Role.DRIVER)
+  @Put('/doc-verification')
+  @UseGuards(JwtRoleAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'The form-data key should be proofOfAddress' })
+  @UseInterceptors(FileInterceptor('proofOfAddress'))
+  async verification(
+    @Req() req: IRequest,
+    @Res() res: Response,
+    @Body() body: VerificationDTO,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    await this.authService.verification(res, req.user, file, body)
   }
 }

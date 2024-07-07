@@ -4,11 +4,13 @@ import {
     EmailDTO,
     SigninDTO,
     SignupDTO,
+    VerificationDTO,
     ResetPasswordDTO,
     UpdatePasswordDTO,
     BiometricLoginDTO,
     EmergencyContractDTO,
 } from './dto/auth.dto'
+import axios from 'axios'
 import { Response } from 'express'
 import { JwtService } from '@nestjs/jwt'
 import { validateFile } from 'utils/file'
@@ -21,6 +23,7 @@ import { EncryptionService } from 'libs/encryption.service'
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
 import { generateOTP, normalizePhoneNumber } from 'helpers/generators'
+import { extractFirstAndLastName, formatDate, toUpperCase } from 'helpers/transformer'
 
 @Injectable()
 export class AuthService {
@@ -612,5 +615,161 @@ export class AuthService {
         })
 
         this.response.sendSuccess(res, StatusCodes.OK, { data: contact })
+    }
+
+    async verification(
+        res: Response,
+        { sub }: ExpressUser,
+        file: Express.Multer.File,
+        {
+            nationalId, vnin,
+            dob, driverLicenseId,
+        }: VerificationDTO
+    ) {
+        try {
+            const isDriverLicenseExist = await this.prisma.verification.findFirst({
+                where: { driverLicense: { equals: driverLicenseId, mode: 'insensitive' } }
+            })
+
+            if (isDriverLicenseExist) {
+                return this.response.sendError(res, StatusCodes.Conflict, "Rider with the same driver's license already exist")
+            }
+
+            const isNINExist = await this.prisma.verification.findUnique({
+                where: { nationalId: nationalId.trim() }
+            })
+
+            if (isNINExist) {
+                return this.response.sendError(res, StatusCodes.Conflict, "Rider with the same ID number already exist")
+            }
+
+            const user = await this.prisma.user.findUnique({
+                where: { id: sub },
+            })
+
+            const formattedDob = formatDate(dob)
+            const full_name: string[] = toUpperCase(user.fullname).split(/[\s,]+/).filter(Boolean)
+            const { firstName, lastName } = extractFirstAndLastName(user.fullname)
+
+            await axios.post(
+                "https://api.verified.africa/sfx-verify/v3/id-service",
+                {
+                    countryCode: 'NG',
+                    dob: formattedDob,
+                    firstName, lastName,
+                    searchParameter: driverLicenseId,
+                    verificationType: "DRIVER-LICENSE-FULL-DETAIL-VERIFICATION",
+                },
+                {
+                    headers: {
+                        userId: process.env.SEAMFIX_USERID,
+                        apiKey: process.env.SEAMFIX_API_KEY,
+                    },
+                }
+            ).then((response) => {
+                const data = response.data.response as DriverLicenseResponse
+                let matchingNamesCount = 0
+
+                const license_full_name = toUpperCase(`${data?.first_name ?? ''} ${data?.middle_name ?? ''} ${data?.last_name ?? ''}`).split(/[\s,]+/).filter(Boolean)
+                const full_name: string[] = toUpperCase(user.fullname).split(/[\s,]+/).filter(Boolean)
+
+                for (const license_name of license_full_name) {
+                    if (full_name.includes(license_name)) {
+                        matchingNamesCount += 1
+                    }
+                }
+
+                let percentage = matchingNamesCount * 25
+                if (percentage < 50) {
+                    return this.response.sendError(res, StatusCodes.Unauthorized, "Profiles not matched")
+                }
+
+                if (data?.mobile) {
+                    for (const tel of data.mobile) {
+                        const normalizedTel = normalizePhoneNumber(tel)
+                        for (const profileTel of user.phone) {
+                            const normalizedProfileTel = normalizePhoneNumber(profileTel)
+                            if (normalizedTel.endsWith(normalizedProfileTel) || normalizedProfileTel.endsWith(normalizedTel)) {
+                                percentage += 5
+                                break
+                            }
+                        }
+                    }
+
+                    const verified = percentage >= 80
+                    if (!verified) {
+                        return this.response.sendError(res, StatusCodes.Unauthorized, "Profiles not matched")
+                    }
+                }
+            }).catch((err) => { throw err })
+
+            await axios.post(
+                "https://api.verified.africa/sfx-verify/v3/id-service",
+                {
+                    countryCode: 'NG',
+                    searchParameter: vnin,
+                    verificationType: "V-NIN",
+                },
+                {
+                    headers: {
+                        userId: process.env.SEAMFIX_USERID,
+                        apiKey: process.env.SEAMFIX_API_KEY,
+                    },
+                }
+            ).then((response) => {
+                const data = response.data.response as VNINResponse
+                let matchingNamesCount = 0
+
+                const vnin_full_name = toUpperCase(`${data?.firname ?? ''} ${data?.middlename ?? ''} ${data?.lastname ?? ''}`).split(/[\s,]+/).filter(Boolean)
+
+                for (const license_name of vnin_full_name) {
+                    if (full_name.includes(license_name)) {
+                        matchingNamesCount += 1
+                    }
+                }
+
+                let percentage = matchingNamesCount * 25
+                if (percentage < 50) {
+                    return this.response.sendError(res, StatusCodes.Unauthorized, "Profiles do not matched")
+                }
+            }).catch((err) => { throw err })
+
+
+            const fileValidation = validateFile(file, 10 << 20, 'jpg', 'jpeg', 'png')
+            if (fileValidation?.status) {
+                return this.response.sendError(res, fileValidation.status, fileValidation.message)
+            }
+
+            const { public_id, secure_url } = await this.cloudinary.upload(fileValidation.file, {
+                folder: 'RideShare/Verification',
+                resource_type: 'image'
+            })
+
+            const proofOfAddress = {
+                size: file.size,
+                type: file.mimetype,
+                url: secure_url,
+                public_id: public_id,
+            }
+
+            const verification = await this.prisma.verification.upsert({
+                where: { userId: sub },
+                create: {
+                    dob: new Date(dob),
+                    proofOfAddress, nationalId,
+                    driverLicense: driverLicenseId,
+                    user: { connect: { id: sub } }
+                },
+                update: {
+                    dob: new Date(dob),
+                    proofOfAddress, nationalId,
+                    driverLicense: driverLicenseId,
+                }
+            })
+
+            this.response.sendSuccess(res, StatusCodes.OK, { data: verification })
+        } catch (err) {
+            this.misc.handleServerError(res, err)
+        }
     }
 }

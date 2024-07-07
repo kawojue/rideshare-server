@@ -1,6 +1,7 @@
 import { UserEnum } from 'enums/base'
 import { Gender } from '@prisma/client'
 import {
+    IsDateString,
     IsEmail, IsEnum, IsNotEmpty, IsOptional,
     IsString, Matches, MaxLength, MinLength,
 } from 'class-validator'
@@ -190,4 +191,41 @@ export class EmergencyContractDTO {
     @IsString()
     @IsNotEmpty()
     phone: string
+}
+
+export class VerificationDTO {
+    @ApiProperty({
+        example: '02730846093'
+    })
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(11)
+    @MaxLength(11)
+    nationalId: string
+
+    @ApiProperty({
+        example: 'SF895332826955L0'
+    })
+    @IsString()
+    @IsNotEmpty()
+    vnin: string
+
+    @ApiProperty({
+        example: 'AAA00000AA00'
+    })
+    @IsString()
+    @IsNotEmpty()
+    driverLicenseId: string
+
+    @ApiProperty({
+        example: new Date()
+    })
+    @IsNotEmpty()
+    @IsDateString()
+    dob: Date
+
+    @ApiProperty({
+        type: File
+    })
+    proofOfAddress: Express.Multer.File
 }

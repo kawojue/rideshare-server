@@ -32,3 +32,17 @@ interface JwtPayload {
     role: Roles
     status?: Status
 }
+
+interface DriverLicenseResponse {
+    mobile: string
+    last_name: string
+    first_name: string
+    middle_name: string
+}
+
+interface VNINResponse {
+    nin: string
+    firname: string
+    lastname: string
+    middlename: string
+}

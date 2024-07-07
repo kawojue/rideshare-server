@@ -24,3 +24,30 @@ export const removeNullFields = (obj: any): any => {
         return obj
     }
 }
+
+export const formatDate = (date: Date | string): string => {
+    const d = new Date(date)
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
+export const extractFirstAndLastName = (fullName: string): { firstName: string, lastName: string } => {
+    fullName = fullName.trim()
+
+    const nameParts = fullName.split(/\s+/)
+
+    let firstName: string
+    let lastName: string
+
+    if (nameParts.length === 1) {
+        firstName = nameParts[0]
+        lastName = ''
+    } else {
+        firstName = nameParts[0]
+        lastName = nameParts[nameParts.length - 1]
+    }
+
+    return { firstName, lastName }
+}

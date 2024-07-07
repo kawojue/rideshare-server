@@ -8,26 +8,27 @@ datasource db {
 }
 
 model User {
-  id                   String    @id @default(uuid()) @db.Uuid
+  id                   String        @id @default(uuid()) @db.Uuid
   fullname             String
-  status               Status    @default(ACTIVE)
+  status               Status        @default(ACTIVE)
   provider             Provider
-  email                String    @unique
-  phone                String    @unique
-  provider_id          String?   @unique
+  email                String        @unique
+  phone                String        @unique
+  provider_id          String?       @unique
   password             String?
   role                 Role
   refresh_token        String?
   totp                 Totp?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
   lastUsedBiometricAt  DateTime?
   lastUsedCredentialAt DateTime?
   lastLoggedInAt       DateTime?
-  raters               Rating[]  @relation("RaterUser")
-  ratings              Rating[]  @relation("TargetUser")
-  lastPasswordChanged  DateTime  @default(now())
+  raters               Rating[]      @relation("RaterUser")
+  ratings              Rating[]      @relation("TargetUser")
+  lastPasswordChanged  DateTime      @default(now())
   profile              Profile?
+  verification         Verification?
 
   @@index([refresh_token])
 }
@@ -48,14 +49,17 @@ model Profile {
   userId           String            @unique @db.Uuid
 }
 
-model Totp {
-  id          String    @id @default(uuid()) @db.Uuid
-  totp        String?
-  totp_expiry DateTime?
-  user        User      @relation(references: [id], fields: [userId])
-  userId      String    @unique @db.Uuid
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+model Verification {
+  id             String   @id @default(uuid()) @db.Uuid
+  dob            DateTime
+  nationalId     String   @unique
+  driverLicense  String   @unique
+  proofOfAddress Json
+  approved       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String   @unique @db.Uuid
 }
 
 model EmergencyContact {
@@ -66,6 +70,16 @@ model EmergencyContact {
   profileId String   @unique @db.Uuid
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Totp {
+  id          String    @id @default(uuid()) @db.Uuid
+  totp        String?
+  totp_expiry DateTime?
+  user        User      @relation(references: [id], fields: [userId])
+  userId      String    @unique @db.Uuid
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model Wallet {
