@@ -11,18 +11,18 @@ import {
     EmergencyContractDTO,
 } from './dto/auth.dto'
 import axios from 'axios'
-import { Response } from 'express'
 import { JwtService } from '@nestjs/jwt'
 import { validateFile } from 'utils/file'
+import { Request, Response } from 'express'
 import { MiscService } from 'libs/misc.service'
 import { StatusCodes } from 'enums/statusCodes'
 import { PlunkService } from 'libs/plunk.service'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
 import { EncryptionService } from 'libs/encryption.service'
-import { Injectable, NotFoundException } from '@nestjs/common'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
 import { generateOTP, normalizePhoneNumber } from 'helpers/generators'
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { extractFirstAndLastName, formatDate, toUpperCase } from 'helpers/transformer'
 
 @Injectable()
@@ -39,7 +39,8 @@ export class AuthService {
 
     private readonly isProd = process.env.NODE_ENV === "production"
 
-    private async updateLoginState(
+    async updateLoginState(
+        res: Response,
         payload: JwtPayload,
         key: 'lastUsedCredentialAt' | 'lastUsedBiometricAt'
     ) {
@@ -53,6 +54,13 @@ export class AuthService {
                 [key]: new Date(),
                 lastLoggedInAt: new Date(),
             }
+        })
+
+        res.cookie('refresh_token', refresh_token, {
+            httpOnly: true,
+            sameSite: this.isProd ? 'none' : 'lax',
+            secure: this.isProd,
+            maxAge: 60 * 60 * 24 * 60 * 1000,
         })
 
         return access_token
@@ -89,20 +97,9 @@ export class AuthService {
             status: user.status
         } as JwtPayload
 
-        const access_token = await this.updateLoginState(payload, 'lastUsedCredentialAt')
-
         const setup = await this.prisma.profileSetup(user.id)
 
-        return {
-            access_token,
-            data: {
-                setup,
-                id: user.id,
-                role: user.role,
-                profile: user.profile,
-                fullname: user.fullname,
-            }
-        }
+        return { payload, setup, user }
     }
 
     async signin(res: Response, { identifier, password }: SigninDTO) {
@@ -147,7 +144,7 @@ export class AuthService {
             status: user.status
         } as JwtPayload
 
-        const access_token = await this.updateLoginState(payload, 'lastUsedCredentialAt')
+        const access_token = await this.updateLoginState(res, payload, 'lastUsedCredentialAt')
 
         const setup = await this.prisma.profileSetup(user.id)
 
@@ -164,10 +161,16 @@ export class AuthService {
     }
 
     async biometricSignin(res: Response, { access_token: accessToken }: BiometricLoginDTO) {
-        const decoded = await this.jwtService.verifyAsync(accessToken, {
-            secret: process.env.JWT_SECRET!,
-            ignoreExpiration: true,
-        })
+        let decoded: JwtDecoded
+
+        try {
+            decoded = await this.jwtService.verifyAsync(accessToken, {
+                secret: process.env.JWT_SECRET!,
+                ignoreExpiration: true,
+            })
+        } catch (err) {
+            throw new UnauthorizedException("Invalid token")
+        }
 
         if (!decoded?.sub) {
             return this.response.sendError(res, StatusCodes.Forbidden, "Invalid token")
@@ -203,7 +206,7 @@ export class AuthService {
             status: user.status,
         } as JwtPayload
 
-        const access_token = await this.updateLoginState(payload, 'lastUsedBiometricAt')
+        const access_token = await this.updateLoginState(res, payload, 'lastUsedBiometricAt')
 
         const setup = await this.prisma.profileSetup(user.id)
 
@@ -277,6 +280,24 @@ export class AuthService {
         this.response.sendSuccess(res, StatusCodes.Created, {
             message: "Successful. Verify your email"
         })
+    }
+
+    async refreshAccessToken(req: Request, res: Response) {
+        try {
+            const refreshToken = req.cookies.refresh_token
+
+            if (!refreshToken) {
+                return this.response.sendError(res, StatusCodes.BadRequest, "Refresh token not found")
+            }
+
+            const newAccessToken = await this.misc.generateNewAccessToken(refreshToken)
+
+            this.response.sendSuccess(res, StatusCodes.OK, {
+                access_token: newAccessToken
+            })
+        } catch (err) {
+            return this.response.sendError(res, StatusCodes.Unauthorized, "Invalid refresh token")
+        }
     }
 
     async verifyOtp(res: Response, { otp }: OTPDTO) {

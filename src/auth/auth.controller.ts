@@ -60,7 +60,20 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   async googleSignin(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const data = await this.authService.googleSignin(req.user)
+    const { payload, setup, user } = await this.authService.googleSignin(req.user)
+
+    const access_token = await this.authService.updateLoginState(res, payload, 'lastUsedCredentialAt')
+
+    const data = {
+      access_token,
+      data: {
+        setup,
+        id: user.id,
+        role: user.role,
+        profile: user.profile,
+        fullname: user.fullname,
+      }
+    }
 
     this.response.sendSuccess(res, StatusCodes.OK, { data })
   }
@@ -88,14 +101,19 @@ export class AuthController {
     await this.authService.signup(res, body)
   }
 
-  @Post('/otp/verify')
-  async verifyOtp(@Res() res: Response, @Body() body: OTPDTO) {
-    await this.authService.verifyOtp(res, body)
+  @Post('/refresh/access-token')
+  async refreshAccessToken(@Res() res: Response, @Req() req: Request) {
+    await this.authService.refreshAccessToken(req, res)
   }
 
   @Post('/otp/request')
   async requestOtp(@Res() res: Response, @Body() body: EmailDTO) {
     await this.authService.requestOtp(res, body)
+  }
+
+  @Post('/otp/verify')
+  async verifyOtp(@Res() res: Response, @Body() body: OTPDTO) {
+    await this.authService.verifyOtp(res, body)
   }
 
   @ApiBearerAuth()

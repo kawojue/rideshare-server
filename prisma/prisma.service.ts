@@ -41,11 +41,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             }
         }
 
-        console.log({
-            iat: decoded.iat,
-            time: new Date(user.lastLoggedInAt).getTime() / 1000
-        })
-
         if ((new Date(user.lastLoggedInAt).getTime() / 1000) > decoded.exp) {
             return {
                 isAbleToUseBiometric: false,

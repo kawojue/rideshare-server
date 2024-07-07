@@ -46,3 +46,8 @@ interface VNINResponse {
     lastname: string
     middlename: string
 }
+
+interface JwtDecoded extends JwtPayload {
+    iat: number
+    exp: number
+}

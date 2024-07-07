@@ -1,8 +1,8 @@
 import { Response } from 'express'
 import { JwtService } from '@nestjs/jwt'
+import { Injectable } from '@nestjs/common'
 import { StatusCodes } from 'enums/statusCodes'
 import { ResponseService } from './response.service'
-import { ForbiddenException, Injectable } from '@nestjs/common'
 
 @Injectable()
 export class MiscService {
@@ -18,7 +18,7 @@ export class MiscService {
 
     async generateAccessToken({ sub, role, status }: JwtPayload): Promise<string> {
         return await this.jwtService.signAsync({ sub, role, status }, {
-            expiresIn: '10m',
+            expiresIn: '30m',
             secret: process.env.JWT_SECRET,
         })
     }
@@ -32,15 +32,10 @@ export class MiscService {
 
     async generateNewAccessToken(refreshToken: string): Promise<string> {
         try {
-            const decoded = this.jwtService.verify(refreshToken, {
+            const decoded = await this.jwtService.verifyAsync(refreshToken, {
                 secret: process.env.JWT_SECRET,
-            })
-
-            const expiry = decoded.exp
-
-            if ((Date.now() / 1000) > expiry) {
-                throw new ForbiddenException("Refresh token has expired")
-            }
+                ignoreExpiration: false,
+            }) as JwtDecoded
 
             return await this.generateAccessToken(decoded)
         } catch (err) {

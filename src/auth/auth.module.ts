@@ -19,7 +19,7 @@ import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
     CloudinaryModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '10m' },
+      signOptions: { expiresIn: '30m' },
     }),
     PassportModule.register({ defaultStrategy: 'jwt' }),
   ],
