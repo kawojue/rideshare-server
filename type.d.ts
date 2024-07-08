@@ -51,3 +51,10 @@ interface JwtDecoded extends JwtPayload {
     iat: number
     exp: number
 }
+
+interface Attachment {
+    size: number,
+    type: string,
+    url: string,
+    public_id: string,
+}

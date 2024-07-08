@@ -4,7 +4,6 @@ import {
   EmailDTO,
   SigninDTO,
   SignupDTO,
-  VerificationDTO,
   ResetPasswordDTO,
   UpdatePasswordDTO,
   BiometricLoginDTO,
@@ -170,21 +169,5 @@ export class AuthController {
     @Body() body: EmergencyContractDTO,
   ) {
     await this.authService.emergencyContact(res, req.user, body)
-  }
-
-  @ApiBearerAuth()
-  @Roles(Role.DRIVER)
-  @Put('/doc-verification')
-  @UseGuards(JwtRoleAuthGuard)
-  @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'The form-data key should be proofOfAddress' })
-  @UseInterceptors(FileInterceptor('proofOfAddress'))
-  async verification(
-    @Req() req: IRequest,
-    @Res() res: Response,
-    @Body() body: VerificationDTO,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
-    await this.authService.verification(res, req.user, file, body)
   }
 }

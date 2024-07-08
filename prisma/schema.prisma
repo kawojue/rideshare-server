@@ -29,6 +29,7 @@ model User {
   lastPasswordChanged  DateTime      @default(now())
   profile              Profile?
   verification         Verification?
+  vehicles             Vehicle[]
 
   @@index([refresh_token])
 }
@@ -58,8 +59,8 @@ model Verification {
   approved       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId         String   @unique @db.Uuid
+  driver         User     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverId       String   @unique @db.Uuid
 }
 
 model EmergencyContact {
@@ -70,6 +71,39 @@ model EmergencyContact {
   profileId String   @unique @db.Uuid
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Vehicle {
+  id                String   @id @default(uuid()) @db.Uuid
+  brand             String
+  model             String
+  classification    String
+  year              String?
+  color             String
+  seatNumber        Int
+  vin               String   @unique
+  plateNumber       String   @unique
+  isOwner           Boolean
+  agreementDocument Json?
+  ownerName         String?
+  ownerPhoneNumber  String?
+  amenity           Amenity?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  driver            User     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverId          String   @db.Uuid
+}
+
+model Amenity {
+  id                 String   @id @default(uuid()) @db.Uuid
+  wifi               Boolean  @default(false)
+  music              Boolean  @default(false)
+  phoneCharger       Boolean  @default(false)
+  temperatureControl Boolean  @default(false)
+  vehicle            Vehicle  @relation(references: [id], fields: [vehicleId])
+  vehicleId          String   @unique @db.Uuid
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Totp {

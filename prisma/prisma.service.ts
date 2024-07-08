@@ -109,7 +109,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         })
 
         const verification = await this.verification.findUnique({
-            where: { userId }
+            where: { driverId: userId }
         })
 
         return {
