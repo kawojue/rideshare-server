@@ -10,7 +10,7 @@ interface CloudinaryModuleOptions {
 
 interface FileDest {
     folder: string
-    resource_type: 'image' | 'video'
+    resource_type: 'image' | 'video' | 'auto' | 'raw'
 }
 
 interface IGenOTP {

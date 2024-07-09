@@ -4,9 +4,9 @@ import {
     UploadApiErrorResponse,
 } from 'cloudinary'
 import { genFileName } from 'utils/file'
-import { Injectable } from '@nestjs/common'
 import toStream = require('buffer-to-stream')
 import { ConfigService } from '@nestjs/config'
+import { Injectable, InternalServerErrorException } from '@nestjs/common'
 
 @Injectable()
 export class CloudinaryService {
@@ -19,7 +19,7 @@ export class CloudinaryService {
     }
 
     async upload(
-        file: Express.Multer.File, header: FileDest,
+        file: Express.Multer.File | Buffer, header: FileDest,
     ): Promise<UploadApiResponse | UploadApiErrorResponse> {
         try {
             return new Promise((resolve, reject) => {
@@ -31,10 +31,15 @@ export class CloudinaryService {
                     resolve(result)
                 })
 
-                toStream(file.buffer).pipe(upload)
+                if (Buffer.isBuffer(file)) {
+                    toStream(file).pipe(upload)
+                } else {
+                    toStream(file.buffer).pipe(upload)
+                }
             })
         } catch (err) {
             console.error(err)
+            throw new InternalServerErrorException("Error uploading file")
         }
     }
 

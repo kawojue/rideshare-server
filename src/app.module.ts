@@ -9,6 +9,7 @@ import { PrismaService } from 'prisma/prisma.service'
 import { DriverModule } from './driver/driver.module'
 import { WalletModule } from './wallet/wallet.module'
 import { ResponseService } from 'libs/response.service'
+import { RealtimeModule } from './realtime/realtime.module'
 import cloudinaryConfig from './cloudinary/cloudinary.config'
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common'
 import { RateLimiterMiddleware } from './middlewares/rate-limit.middleware'
@@ -22,6 +23,7 @@ import { RateLimiterMiddleware } from './middlewares/rate-limit.middleware'
     UserModule,
     DriverModule,
     WalletModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
   providers: [
