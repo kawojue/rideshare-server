@@ -8,49 +8,56 @@ datasource db {
 }
 
 model User {
-  id                   String        @id @default(uuid()) @db.Uuid
+  id                   String    @id @default(uuid()) @db.Uuid
   fullname             String
-  status               Status        @default(ACTIVE)
+  status               Status    @default(ACTIVE)
   provider             Provider
-  email                String        @unique
-  phone                String        @unique
-  provider_id          String?       @unique
+  email                String    @unique
+  phone                String    @unique
+  provider_id          String?   @unique
   password             String?
   role                 Role
   refresh_token        String?
-  totp                 Totp?
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
   lastUsedBiometricAt  DateTime?
   lastUsedCredentialAt DateTime?
   lastLoggedInAt       DateTime?
-  raters               Rating[]      @relation("RaterUser")
-  ratings              Rating[]      @relation("TargetUser")
-  lastPasswordChanged  DateTime      @default(now())
-  profile              Profile?
-  verification         Verification?
+  lastPasswordChanged  DateTime  @default(now())
+
+  totp         Totp?
+  inbox        Inbox?
+  wallet       Wallet?
+  profile      Profile?
+  verification Verification?
+
   vehicles             Vehicle[]
-  wallet               Wallet?
-  banks                LinkedBank[]
   transactionHistories TxHistory[]
+  banks                LinkedBank[]
+  raters               Rating[]     @relation("RaterUser")
+  ratings              Rating[]     @relation("TargetUser")
+  sentMessages         Message[]    @relation("UserSentMessages")
+  receivedMessages     Message[]    @relation("UserReceivedMessages")
 
   @@index([refresh_token])
 }
 
 model Profile {
-  id               String            @id @default(uuid()) @db.Uuid
-  avatar           Json?
-  gender           Gender
-  email_verified   Boolean           @default(false)
-  pin              String?
-  lastPinChanged   DateTime?
-  biometric        Boolean           @default(false)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  address          String?
+  id             String    @id @default(uuid()) @db.Uuid
+  avatar         Json?
+  gender         Gender
+  email_verified Boolean   @default(false)
+  pin            String?
+  lastPinChanged DateTime?
+  biometric      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  address        String?
+
   emergencyContact EmergencyContact?
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId           String            @unique @db.Uuid
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique @db.Uuid
 }
 
 model Verification {
@@ -62,18 +69,20 @@ model Verification {
   approved       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  driver         User     @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  driverId       String   @unique @db.Uuid
+
+  driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverId String @unique @db.Uuid
 }
 
 model EmergencyContact {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
   phone     String
-  profile   Profile  @relation(references: [id], fields: [profileId], onDelete: Cascade)
-  profileId String   @unique @db.Uuid
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  profile   Profile @relation(references: [id], fields: [profileId], onDelete: Cascade)
+  profileId String  @unique @db.Uuid
 }
 
 model Vehicle {
@@ -90,11 +99,13 @@ model Vehicle {
   agreementDocument Json?
   ownerName         String?
   ownerPhoneNumber  String?
-  amenity           Amenity?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  driver            User     @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  driverId          String   @db.Uuid
+
+  amenity Amenity?
+
+  driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverId String @db.Uuid
 }
 
 model Amenity {
@@ -103,10 +114,11 @@ model Amenity {
   music              Boolean  @default(false)
   phoneCharger       Boolean  @default(false)
   temperatureControl Boolean  @default(false)
-  vehicle            Vehicle  @relation(references: [id], fields: [vehicleId], onDelete: Cascade)
-  vehicleId          String   @unique @db.Uuid
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  vehicle   Vehicle @relation(references: [id], fields: [vehicleId], onDelete: Cascade)
+  vehicleId String  @unique @db.Uuid
 }
 
 model Cache {
@@ -126,10 +138,11 @@ model Totp {
   id          String    @id @default(uuid()) @db.Uuid
   totp        String?
   totp_expiry DateTime?
-  user        User      @relation(references: [id], fields: [userId], onDelete: Cascade)
-  userId      String    @unique @db.Uuid
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  user   User   @relation(references: [id], fields: [userId], onDelete: Cascade)
+  userId String @unique @db.Uuid
 }
 
 model LinkedBank {
@@ -141,8 +154,9 @@ model LinkedBank {
   primary       Boolean  @default(false)
   updatedAt     DateTime @updatedAt
   createdAt     DateTime @default(now())
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId        String   @db.Uuid
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @db.Uuid
 }
 
 model TxHistory {
@@ -166,8 +180,9 @@ model TxHistory {
   destinationAccountNumber String?
   createdAt                DateTime       @default(now())
   updatedAt                DateTime       @updatedAt
-  user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId                   String         @db.Uuid
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @db.Uuid
 }
 
 model Wallet {
@@ -178,27 +193,77 @@ model Wallet {
   lastWithdrawnAt     DateTime?
   lastAmountDeposited Float     @default(0.00)
   lastAmountWithDrawn Float     @default(0.00)
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId              String    @unique @db.Uuid
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique @db.Uuid
 }
 
 model Modmin {
-  id       String @id @default(uuid()) @db.Uuid
-  fullname String
-  status   Status @default(ACTIVE)
+  id            String   @id @default(uuid()) @db.Uuid
+  fullname      String
+  refresh_token String?
+  status        Status   @default(ACTIVE)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  inbox Inbox?
+
+  sentMessages     Message[] @relation("ModminSentMessages")
+  receivedMessages Message[] @relation("ModminReceivedMessages")
+
+  @@index([refresh_token])
 }
 
 model Rating {
-  id           String   @id @default(uuid()) @db.Uuid
-  point        Float
-  review       String?
-  target       User     @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
-  targetUserId String   @db.Uuid
-  rater        User     @relation("RaterUser", fields: [raterUserId], references: [id], onDelete: Cascade)
-  raterUserId  String   @db.Uuid
-  createdAt    DateTime @default(now())
+  id        String   @id @default(uuid()) @db.Uuid
+  point     Float
+  review    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  targetUserId String @db.Uuid
+  raterUserId  String @db.Uuid
+
+  target User @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  rater  User @relation("RaterUser", fields: [raterUserId], references: [id], onDelete: Cascade)
+}
+
+model Inbox {
+  id        String   @id @default(uuid()) @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  modminId String? @unique @db.Uuid
+  userId   String? @unique @db.Uuid
+
+  modmin Modmin? @relation(references: [id], fields: [modminId], onDelete: Cascade)
+  user   User?   @relation(references: [id], fields: [userId], onDelete: Cascade)
+
+  messages Message[]
+}
+
+model Message {
+  id String @id @default(uuid()) @db.Uuid
+
+  content   String?
+  file      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inboxId          String  @db.Uuid
+  userSenderId     String? @db.Uuid
+  modminSenderId   String? @db.Uuid
+  userReceiverId   String? @db.Uuid
+  modminReceiverId String? @db.Uuid
+
+  inbox          Inbox   @relation(fields: [inboxId], references: [id])
+  userSender     User?   @relation("UserSentMessages", fields: [userSenderId], references: [id], onDelete: Cascade)
+  modminSender   Modmin? @relation("ModminSentMessages", fields: [modminSenderId], references: [id], onDelete: Cascade)
+  userReceiver   User?   @relation("UserReceivedMessages", fields: [userReceiverId], references: [id], onDelete: Cascade)
+  modminReceiver Modmin? @relation("ModminReceivedMessages", fields: [modminReceiverId], references: [id], onDelete: Cascade)
 }
 
 enum Role {
