@@ -58,3 +58,9 @@ interface Attachment {
     url: string,
     public_id: string,
 }
+
+interface Fee {
+    totalFee: number
+    paystackFee: number
+    processingFee: number
+}

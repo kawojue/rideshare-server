@@ -4,12 +4,12 @@ import {
   Res,
   Body,
   Post,
+  Param,
+  Delete,
   UseGuards,
   Controller,
   UploadedFile,
   UseInterceptors,
-  Param,
-  Delete,
 } from '@nestjs/common'
 import {
   ApiTags,
@@ -20,11 +20,11 @@ import {
 import { Response } from 'express'
 import { Role } from '@prisma/client'
 import { Roles } from 'src/jwt/role.decorator'
-import { VehicleDTO } from './dto/vehicle.dto'
 import { DriverService } from './driver.service'
 import { VerificationDTO } from './dto/verification.dto'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
 import { FileInterceptor } from '@nestjs/platform-express'
+import { UpdateVehicleDTO, VehicleDTO } from './dto/vehicle.dto'
 
 @ApiTags("Driver")
 @Controller('driver')
@@ -73,7 +73,7 @@ export class DriverController {
   async updateVehicle(
     @Req() req: IRequest,
     @Res() res: Response,
-    @Body() body: VehicleDTO,
+    @Body() body: UpdateVehicleDTO,
     @Param('vehicleId') vehicleId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {

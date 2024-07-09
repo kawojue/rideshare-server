@@ -6,7 +6,7 @@ export class PaystackService {
     private readonly consumer: Consumer
 
     constructor() {
-        this.consumer = new Consumer('https://api.paystack.co', `Bearer ${process.env.PS_SECRET_KEY!}`)
+        this.consumer = new Consumer('https://api.paystack.co', `Bearer ${process.env.PAYSTACK_SECRET_KEY!}`)
     }
 
     verifyDetails({ account_number, bank_code }: VerifyDetailsData) {

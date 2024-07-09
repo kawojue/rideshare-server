@@ -7,13 +7,13 @@ import { Response } from 'express'
 import { Prisma } from '@prisma/client'
 import { validateFile } from 'utils/file'
 import { Injectable } from '@nestjs/common'
-import { VehicleDTO } from './dto/vehicle.dto'
 import { MiscService } from 'libs/misc.service'
 import { StatusCodes } from 'enums/statusCodes'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
 import { VerificationDTO } from './dto/verification.dto'
 import { normalizePhoneNumber } from 'helpers/generators'
+import { UpdateVehicleDTO, VehicleDTO } from './dto/vehicle.dto'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
 
 @Injectable()
@@ -307,7 +307,7 @@ export class DriverService {
             music,
             phoneCharger,
             temperatureControl,
-        }: VehicleDTO,
+        }: UpdateVehicleDTO,
         file?: Express.Multer.File,
     ) {
         try {

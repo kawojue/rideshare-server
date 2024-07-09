@@ -16,6 +16,15 @@ export class MiscService {
         return this.response.sendError(res, StatusCodes.InternalServerError, msg || err?.message || 'Something went wrong')
     }
 
+    handlePaystackAndServerError(res: Response, err: any) {
+        if (err.response?.message) {
+            console.error(err)
+            this.response.sendError(res, err.status, err.response.message)
+        } else {
+            this.handleServerError(res, err)
+        }
+    }
+
     async generateAccessToken({ sub, role, status }: JwtPayload): Promise<string> {
         return await this.jwtService.signAsync({ sub, role, status }, {
             expiresIn: '30m',
@@ -41,5 +50,20 @@ export class MiscService {
         } catch (err) {
             throw err
         }
+    }
+
+    async calculateFees(amount: number): Promise<Fee> {
+        const processingFee = 15
+        let paystackFee: number
+
+        if (amount <= 5_000) {
+            paystackFee = 10
+        } else {
+            paystackFee = amount <= 50_000 ? 25 : 50
+        }
+
+        const totalFee = processingFee + paystackFee
+
+        return { processingFee, paystackFee, totalFee }
     }
 }

@@ -37,6 +37,7 @@
     "@nestjs/websockets": "^10.3.9",
     "@plunk/node": "^3.0.2",
     "@prisma/client": "^5.16.1",
+    "async-mutex": "^0.5.0",
     "axios": "^1.7.2",
     "bcrypt": "^5.1.1",
     "buffer-to-stream": "^1.0.0",

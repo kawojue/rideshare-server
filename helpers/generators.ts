@@ -1,4 +1,4 @@
-export const normalizePhoneNumber = (phoneNumber: string) => {
+export const normalizePhoneNumber = (phoneNumber: string): string => {
     let normalized = phoneNumber.replace(/\D/g, '')
 
     if (normalized.startsWith('0')) {
@@ -15,11 +15,7 @@ export const normalizePhoneNumber = (phoneNumber: string) => {
 }
 
 export const generateOTP = (length: number = 6): IGenOTP => {
-    let totp: string = ''
-    const digits: string = '0123456789'
-    for (let i = 0; i < length; i++) {
-        totp += digits[Math.floor(Math.random() * length)]
-    }
+    let totp: string = generateRandomDigits(length)
 
     const now: Date = new Date()
     const totp_expiry: Date = new Date(
@@ -27,4 +23,14 @@ export const generateOTP = (length: number = 6): IGenOTP => {
     )
 
     return { totp, totp_expiry }
+}
+
+export const generateRandomDigits = (length: number): string => {
+    let num: string = ''
+    const digits: string = '0123456789'
+    for (let i = 0; i < length; i++) {
+        num += digits[Math.floor(Math.random() * length)]
+    }
+
+    return num
 }

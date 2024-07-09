@@ -9,6 +9,7 @@ import {
     BiometricLoginDTO,
     EmergencyContractDTO,
 } from './dto/auth.dto'
+import { v4 as uuidv4 } from 'uuid'
 import { JwtService } from '@nestjs/jwt'
 import { validateFile } from 'utils/file'
 import { Request, Response } from 'express'
@@ -240,13 +241,21 @@ export class AuthService {
 
         password = await this.encryption.hash(password)
 
-        const user = await this.prisma.user.create({
-            data: {
-                fullname, provider: 'Local',
-                email, phone, role: as, password,
-                profile: { create: { gender, address } },
-            }
-        })
+        const _id = uuidv4()
+
+        const [user] = await this.prisma.$transaction([
+            this.prisma.user.create({
+                data: {
+                    id: _id,
+                    fullname, provider: 'Local',
+                    email, phone, role: as, password,
+                    profile: { create: { gender, address } },
+                }
+            }),
+            this.prisma.wallet.create({
+                data: { user: { connect: { id: _id } } }
+            })
+        ])
 
         res.on('finish', async () => {
             if (user) {
