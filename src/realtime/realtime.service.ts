@@ -1,5 +1,4 @@
 import { Server } from 'socket.io'
-import { Message } from '@prisma/client'
 import { Injectable } from '@nestjs/common'
 import { StatusCodes } from 'enums/statusCodes'
 import { PrismaService } from 'prisma/prisma.service'
@@ -58,18 +57,5 @@ export class RealtimeService {
       type: fileType,
       secure_url, public_id,
     }
-  }
-
-  async markMessagesAsRead(messages: Message[]) {
-    const updatePromises = messages.map(async (message) => {
-      if (!message.isRead) {
-        await this.prisma.message.update({
-          where: { id: message.id, isRead: false },
-          data: { isRead: true },
-        })
-      }
-    })
-
-    await Promise.all(updatePromises)
   }
 }
