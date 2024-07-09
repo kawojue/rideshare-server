@@ -8,10 +8,10 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets'
+import { Role } from '@prisma/client'
 import { JwtService } from '@nestjs/jwt'
 import { Server, Socket } from 'socket.io'
 import { MessageDTO } from './dto/index.dto'
-import { Message, Role } from '@prisma/client'
 import { StatusCodes } from 'enums/statusCodes'
 import { RealtimeService } from './realtime.service'
 import { PrismaService } from 'prisma/prisma.service'
@@ -238,7 +238,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
         ],
       },
       include: {
-        messages: true,
+        messages: {
+          select: {
+            read: true
+          }
+        },
         user: {
           select: {
             id: true,
@@ -246,7 +250,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
             profile: {
               select: {
                 avatar: true,
-
               }
             },
             fullname: true,
@@ -262,7 +265,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       },
     })
 
-    client.emit('inboxes', inboxes)
+    const inboxesWithUnreadCounts = inboxes.map(inbox => {
+      const unreadCount = inbox.messages.filter(message => !message.read).length
+      return {
+        ...inbox,
+        unreadCount
+      }
+    })
+
+    client.emit('inboxes', inboxesWithUnreadCounts)
   }
 
   @SubscribeMessage('get_inbox')
@@ -349,6 +360,90 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     }
 
     client.emit('inbox', inbox)
+  }
+
+  @SubscribeMessage('fetch_messages')
+  async handleFetchMessages(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() { inboxId }: { inboxId: string }
+  ) {
+    const sender = this.clients.get(client)
+
+    if (!sender) {
+      client.emit('error', {
+        status: StatusCodes.Unauthorized,
+        message: 'Unauthorized',
+      })
+      return
+    }
+
+    const inbox = await this.prisma.inbox.findUnique({
+      where: { id: inboxId },
+      include: {
+        messages: true,
+      },
+    })
+
+    if (!inbox) {
+      client.emit('error', {
+        status: StatusCodes.NotFound,
+        message: 'Inbox not found',
+      })
+      return
+    }
+
+    if (
+      (sender.role === Role.ADMIN || sender.role === Role.MODERATOR) &&
+      inbox.modminId !== sender.sub
+    ) {
+      client.emit('error', {
+        status: StatusCodes.Forbidden,
+        message: 'You are not allowed to access this inbox',
+      })
+      return
+    } else if (
+      (sender.role === Role.DRIVER || sender.role === Role.PASSENGER) &&
+      inbox.userId !== sender.sub
+    ) {
+      client.emit('error', {
+        status: StatusCodes.Forbidden,
+        message: 'You are not allowed to access this inbox',
+      })
+      return
+    }
+
+    await this.prisma.message.updateMany({
+      where: { inboxId: inbox.id, read: false },
+      data: { read: true },
+    })
+
+    const updatedInbox = await this.prisma.inbox.findUnique({
+      where: { id: inboxId },
+      include: {
+        messages: true,
+        user: {
+          select: {
+            id: true,
+            role: true,
+            profile: {
+              select: {
+                avatar: true,
+              },
+            },
+            fullname: true,
+          },
+        },
+        modmin: {
+          select: {
+            id: true,
+            role: true,
+            fullname: true,
+          },
+        },
+      },
+    })
+
+    client.emit('messages', updatedInbox)
   }
 
   private isCommunicationAllowed(senderRole: Role, receiverRole: Role): boolean {
