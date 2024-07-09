@@ -306,11 +306,11 @@ export class WalletService {
                 }
             }
 
-            const amountInKobo = amount * 100
             const fee = await this.misc.calculateFees(amount)
-            const amountPlusFee = amount + fee.totalFee
+            const settlementAmount = amount - fee.totalFee
+            const amountInKobo = settlementAmount * 100
 
-            if (amountPlusFee > wallet.balance) {
+            if (amount > wallet.balance) {
                 return this.response.sendError(res, StatusCodes.UnprocessableEntity, "Insufficient Balance")
             }
 
@@ -329,19 +329,19 @@ export class WalletService {
                 source: 'balance',
                 reason: `RideShare - withdrawal`,
                 amount: amountInKobo,
-                reference: `transfer-${generateRandomDigits(7)}${Date.now()}`,
+                reference: `withdrawal-${generateRandomDigits(7)}${Date.now()}`,
             })
 
             const [_, tx] = await Promise.all([
-                this.updateUserBalance(userId, amountPlusFee, 'decrement'),
+                this.updateUserBalance(userId, amount, 'decrement'),
                 this.prisma.txHistory.create({
                     data: {
                         amount: amount,
                         type: 'WITHDRAWAL',
                         ip: getIPAddress(req),
                         totalFee: fee.totalFee,
-                        reference: transfer.reference,
                         paystackFee: fee.paystackFee,
+                        reference: transfer.reference,
                         processingFee: fee.processingFee,
                         transfer_code: transfer.transfer_code,
                         recipient_code: String(transfer.recipient),
