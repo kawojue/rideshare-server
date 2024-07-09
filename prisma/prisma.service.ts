@@ -1,7 +1,8 @@
-
 import {
-    Injectable, OnModuleInit,
-    OnModuleDestroy, NotFoundException
+    Injectable,
+    OnModuleInit,
+    OnModuleDestroy,
+    NotFoundException,
 } from '@nestjs/common'
 import { PrismaClient } from '@prisma/client'
 
@@ -15,7 +16,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         await this.$disconnect()
     }
 
-    async biometricCheck(decoded: any, type: 'Login' | 'Tx') {
+    async biometricCheck(decoded: any, type: Biometric) {
         const userId = decoded.sub
 
         const user = await this.user.findUnique({

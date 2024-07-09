@@ -1,3 +1,7 @@
+type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'MODERATOR'
+type Status = 'ACTIVE' | 'SUSPENDED'
+type Biometric = 'Tx' | 'Login'
+
 interface CloudinaryModuleOptions {
     cloudName: string
     apiKey: string
@@ -13,9 +17,6 @@ interface IGenOTP {
     totp: string
     totp_expiry: Date
 }
-
-type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'MODERATOR'
-type Status = 'ACTIVE' | 'SUSPENDED'
 
 interface ExpressUser extends Express.User {
     sub: string
