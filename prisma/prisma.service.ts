@@ -97,6 +97,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         })
     }
 
+    async getUserWallet(userId: string) {
+        return await this.wallet.findUnique({
+            where: { userId }
+        })
+    }
+
     async profileSetup(userId: string) {
         const user = await this.user.findUnique({
             where: { id: userId },

@@ -30,6 +30,9 @@ model User {
   profile              Profile?
   verification         Verification?
   vehicles             Vehicle[]
+  wallet               Wallet?
+  banks                LinkedBank[]
+  transactionHistories TxHistory[]
 
   @@index([refresh_token])
 }
@@ -67,7 +70,7 @@ model EmergencyContact {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
   phone     String
-  profile   Profile  @relation(references: [id], fields: [profileId])
+  profile   Profile  @relation(references: [id], fields: [profileId], onDelete: Cascade)
   profileId String   @unique @db.Uuid
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -100,25 +103,85 @@ model Amenity {
   music              Boolean  @default(false)
   phoneCharger       Boolean  @default(false)
   temperatureControl Boolean  @default(false)
-  vehicle            Vehicle  @relation(references: [id], fields: [vehicleId])
+  vehicle            Vehicle  @relation(references: [id], fields: [vehicleId], onDelete: Cascade)
   vehicleId          String   @unique @db.Uuid
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+model Cache {
+  id           String    @id @default(uuid()) @db.Uuid
+  key          String    @unique
+  value        Int?
+  expires_in   Int?
+  scope        String?
+  token_type   String?
+  access_token String?
+  type         CacheType
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model Totp {
   id          String    @id @default(uuid()) @db.Uuid
   totp        String?
   totp_expiry DateTime?
-  user        User      @relation(references: [id], fields: [userId])
+  user        User      @relation(references: [id], fields: [userId], onDelete: Cascade)
   userId      String    @unique @db.Uuid
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
 
+model LinkedBank {
+  id            String   @id @default(uuid()) @db.Uuid
+  bankName      String
+  accountName   String
+  accountNumber String
+  bankCode      String
+  primary       Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String   @db.Uuid
+}
+
+model TxHistory {
+  id                       String         @id @default(uuid()) @db.Uuid
+  ip                       String?
+  status                   TransferStatus
+  amount                   Float          @default(0.00)
+  type                     TxType
+  description              String?
+  channel                  String?
+  reference                String         @unique
+  transfer_code            String?
+  recipient_code           String?
+  authorization_code       String?
+  totalFee                 Float          @default(0.00)
+  paystackFee              Float          @default(0.00)
+  processingFee            Float          @default(0.00)
+  destinationBankCode      String?
+  destinationBankName      String?
+  destinationAccountName   String?
+  destinationAccountNumber String?
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                   String         @db.Uuid
+}
+
 model Wallet {
-  id      String @id @default(uuid()) @db.Uuid
-  balance Float  @default(0.00)
+  id                  String    @id @default(uuid()) @db.Uuid
+  balance             Float     @default(0.00)
+  locked              Boolean   @default(false)
+  lastDepositedAt     DateTime?
+  lastWithdrawnAt     DateTime?
+  lastAmountDeposited Float     @default(0.00)
+  lastAmountWithDrawn Float     @default(0.00)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String    @unique @db.Uuid
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
 model Modmin {
@@ -158,4 +221,24 @@ enum Provider {
 enum Status {
   ACTIVE
   SUSPENDED
+}
+
+enum TxType {
+  DEPOSIT
+  PAYMENT
+  WITHDRAWAL
+}
+
+enum CacheType {
+  PIN
+}
+
+enum TransferStatus {
+  FAILED
+  PENDING
+  SUCCESS
+  REVERSED
+  RECEIVED
+  COMPLETED
+  SUCCESSFUL
 }
