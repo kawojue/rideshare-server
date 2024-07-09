@@ -4,6 +4,7 @@ import {
     IsNotEmpty,
     IsOptional,
 } from "class-validator"
+import { v4 as uuidv4 } from 'uuid'
 import { ApiProperty } from "@nestjs/swagger"
 
 
@@ -21,12 +22,39 @@ export class MessageDTO {
     @IsString()
     @IsNotEmpty()
     @IsOptional()
-    content: string
+    content?: string
 
     @ApiProperty({
         example: 'base64 string. Image/video/audio'
     })
     @IsOptional()
     @IsBase64()
-    file: string
+    file?: any
+}
+
+export class OnlineStatusDTO {
+    @ApiProperty({
+        example: uuidv4()
+    })
+    @IsString()
+    @IsNotEmpty()
+    targetUserId: string
+}
+
+export class GetInboxDTO {
+    @ApiProperty({
+        example: uuidv4()
+    })
+    @IsString()
+    @IsNotEmpty()
+    receiverId: string
+}
+
+export class FetchMessagesDTO {
+    @ApiProperty({
+        example: uuidv4()
+    })
+    @IsString()
+    @IsNotEmpty()
+    inboxId: string
 }

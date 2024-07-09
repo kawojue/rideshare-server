@@ -1,4 +1,16 @@
 import {
+  MessageDTO,
+  GetInboxDTO,
+  OnlineStatusDTO,
+  FetchMessagesDTO,
+} from './dto/index.dto'
+import {
+  ApiTags,
+  ApiResponse,
+  ApiOperation,
+  ApiBearerAuth,
+} from '@nestjs/swagger'
+import {
   MessageBody,
   OnGatewayInit,
   ConnectedSocket,
@@ -11,11 +23,11 @@ import {
 import { Role } from '@prisma/client'
 import { JwtService } from '@nestjs/jwt'
 import { Server, Socket } from 'socket.io'
-import { MessageDTO } from './dto/index.dto'
 import { StatusCodes } from 'enums/statusCodes'
 import { RealtimeService } from './realtime.service'
 import { PrismaService } from 'prisma/prisma.service'
 
+@ApiTags('Realtime')
 @WebSocketGateway({
   transports: ['polling', 'websocket'],
   cors: {
@@ -43,6 +55,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     this.realtimeService.setServer(this.server)
   }
 
+  @ApiOperation({ summary: 'Handle connection of WebSocket client' })
   async handleConnection(client: Socket) {
     const token = client.handshake.headers['authorization']?.split('Bearer ')[1]
     if (!token) {
@@ -72,6 +85,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     }
   }
 
+  @ApiOperation({ summary: 'Handle disconnection of WebSocket client' })
   handleDisconnect(client: Socket) {
     const user = this.clients.get(client)
     if (user) {
@@ -80,6 +94,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     this.clients.delete(client)
   }
 
+  @ApiOperation({ summary: 'Send a message' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: StatusCodes.OK, description: 'Message sent successfully' })
+  @ApiResponse({ status: StatusCodes.Unauthorized, description: 'Unauthorized' })
+  @ApiResponse({ status: StatusCodes.BadRequest, description: 'Blank message is not allowed' })
   @SubscribeMessage('send_message')
   async handleMessage(
     @ConnectedSocket() client: Socket,
@@ -91,6 +110,14 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       client.emit('error', {
         status: StatusCodes.Unauthorized,
         message: 'Unauthorized',
+      })
+      return
+    }
+
+    if (!content && !file) {
+      client.emit('validation_error', {
+        status: StatusCodes.BadRequest,
+        message: 'Blank message is not allowed',
       })
       return
     }
@@ -169,10 +196,14 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     this.server.to(receiver.id).emit('new_message', message)
   }
 
+  @ApiOperation({ summary: 'Check online status of a user' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: StatusCodes.OK, description: 'Online status checked successfully' })
+  @ApiResponse({ status: StatusCodes.Unauthorized, description: 'Unauthorized' })
   @SubscribeMessage('check_online_status')
   async handleCheckOnlineStatus(
     @ConnectedSocket() client: Socket,
-    @MessageBody() { targetUserId }: { targetUserId: string }
+    @MessageBody() { targetUserId }: OnlineStatusDTO
   ) {
     const user = this.clients.get(client)
 
@@ -188,6 +219,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     client.emit('online_status', { targetUserId, isOnline })
   }
 
+  @ApiOperation({ summary: 'Fetch admins and moderators' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: StatusCodes.OK, description: 'Admins and moderators fetched successfully' })
+  @ApiResponse({ status: StatusCodes.Unauthorized, description: 'Unauthorized' })
   @SubscribeMessage('get_admins_and_moderators')
   async handleGetAdminsAndModerators(@ConnectedSocket() client: Socket) {
     const user = this.clients.get(client)
@@ -218,6 +253,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     client.emit('admins_and_moderators', sortedAdminsAndModerators)
   }
 
+  @ApiOperation({ summary: 'Fetch inboxes' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: StatusCodes.OK, description: 'Inboxes fetched successfully' })
+  @ApiResponse({ status: StatusCodes.Unauthorized, description: 'Unauthorized' })
   @SubscribeMessage('fetch_inboxes')
   async handleFetchInboxes(@ConnectedSocket() client: Socket) {
     const sender = this.clients.get(client)
@@ -276,10 +315,14 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     client.emit('inboxes', inboxesWithUnreadCounts)
   }
 
+  @ApiOperation({ summary: 'Get inbox details' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: StatusCodes.OK, description: 'Inbox fetched successfully' })
+  @ApiResponse({ status: StatusCodes.Unauthorized, description: 'Unauthorized' })
   @SubscribeMessage('get_inbox')
   async handleGetInbox(
     @ConnectedSocket() client: Socket,
-    @MessageBody() { receiverId }: { receiverId: string }
+    @MessageBody() { receiverId }: GetInboxDTO
   ) {
     const sender = this.clients.get(client)
 
@@ -362,10 +405,14 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     client.emit('inbox', inbox)
   }
 
+  @ApiOperation({ summary: 'Fetch messages from an inbox' })
+  @ApiBearerAuth()
+  @ApiResponse({ status: StatusCodes.OK, description: 'Messages fetched successfully' })
+  @ApiResponse({ status: StatusCodes.Unauthorized, description: 'Unauthorized' })
   @SubscribeMessage('fetch_messages')
   async handleFetchMessages(
     @ConnectedSocket() client: Socket,
-    @MessageBody() { inboxId }: { inboxId: string }
+    @MessageBody() { inboxId }: FetchMessagesDTO
   ) {
     const sender = this.clients.get(client)
 
