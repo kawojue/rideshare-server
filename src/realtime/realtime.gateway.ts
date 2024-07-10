@@ -684,5 +684,54 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     client.emit('call_ended', { status: StatusCodes.OK, message: 'Call ended' })
   }
 
+  @SubscribeMessage('fetch_call_logs')
+  async handleFetchCallLogs(@ConnectedSocket() client: Socket) {
+    const user = this.clients.get(client)
+
+    if (!user) {
+      client.emit('error', {
+        status: StatusCodes.Unauthorized,
+        message: 'Unauthorized',
+      })
+      return
+    }
+
+    const logs = await this.prisma.callLog.findMany({
+      where: {
+        callerId: user.sub,
+        receiverId: user.sub,
+      },
+      include: {
+        caller: {
+          select: {
+            id: true,
+            role: true,
+            profile: {
+              select: {
+                avatar: true,
+              }
+            },
+            fullname: true,
+          }
+        },
+        receiver: {
+          select: {
+            id: true,
+            role: true,
+            profile: {
+              select: {
+                avatar: true,
+              }
+            },
+            fullname: true,
+          }
+        }
+      },
+      orderBy: { updatedAt: 'desc' }
+    })
+
+    client.emit('call_logs', logs)
+  }
+
   // TODO: fetch users (driver-passenger)
 }
