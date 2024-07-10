@@ -38,6 +38,8 @@ model User {
   ratings              Rating[]     @relation("TargetUser")
   sentMessages         Message[]    @relation("UserSentMessages")
   receivedMessages     Message[]    @relation("UserReceivedMessages")
+  receivedCallLogs     CallLog[]    @relation("UserReceivedCalls")
+  initiatedCallLogs    CallLog[]    @relation("UserInitiatedCalls")
 
   @@index([refresh_token])
 }
@@ -267,6 +269,19 @@ model Message {
   modminReceiver Modmin? @relation("ModminReceivedMessages", fields: [modminReceiverId], references: [id], onDelete: Cascade)
 }
 
+model CallLog {
+  id         String     @id @default(uuid()) @db.Uuid
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  callStatus CallStatus
+
+  callerId   String @db.Uuid
+  receiverId String @db.Uuid
+
+  caller   User @relation("UserInitiatedCalls", fields: [callerId], references: [id], onDelete: Cascade)
+  receiver User @relation("UserReceivedCalls", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
 enum Role {
   ADMIN
   DRIVER
@@ -307,4 +322,13 @@ enum TransferStatus {
   RECEIVED
   COMPLETED
   SUCCESSFUL
+}
+
+enum CallStatus {
+  INITIATED
+  ANSWERED
+  REJECTED
+  RECEIVED
+  MISSED
+  ENDED
 }

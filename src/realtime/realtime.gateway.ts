@@ -1,6 +1,7 @@
 import {
+  CallerDTO,
   MessageDTO,
-  GetInboxDTO,
+  ReceiverDTO,
   OnlineStatusDTO,
   FetchMessagesDTO,
 } from './dto/index.dto'
@@ -292,7 +293,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
   @SubscribeMessage('get_inbox')
   async handleGetInbox(
     @ConnectedSocket() client: Socket,
-    @MessageBody() { receiverId }: GetInboxDTO
+    @MessageBody() { receiverId }: ReceiverDTO,
   ) {
     const sender = this.clients.get(client)
 
@@ -469,6 +470,218 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return false
     }
     return true
+  }
+
+  private isCallAllowed(senderRole: Role, receiverRole: Role): boolean {
+    if (
+      (senderRole === Role.DRIVER && receiverRole === Role.DRIVER) ||
+      (senderRole === Role.PASSENGER && receiverRole === Role.PASSENGER) ||
+      (senderRole === Role.ADMIN && receiverRole === Role.ADMIN) ||
+      (senderRole === Role.MODERATOR && receiverRole === Role.MODERATOR) ||
+      (senderRole === Role.DRIVER && receiverRole === Role.ADMIN) ||
+      (senderRole === Role.DRIVER && receiverRole === Role.MODERATOR) ||
+      (senderRole === Role.PASSENGER && receiverRole === Role.ADMIN) ||
+      (senderRole === Role.PASSENGER && receiverRole === Role.MODERATOR) ||
+      (senderRole === Role.ADMIN && receiverRole === Role.DRIVER) ||
+      (senderRole === Role.ADMIN && receiverRole === Role.PASSENGER) ||
+      (senderRole === Role.MODERATOR && receiverRole === Role.DRIVER) ||
+      (senderRole === Role.MODERATOR && receiverRole === Role.PASSENGER)
+    ) {
+      return false
+    }
+    return true
+  }
+
+  @SubscribeMessage('make_call')
+  async handleMakeCall(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() { receiverId }: ReceiverDTO,
+  ) {
+    const sender = this.clients.get(client)
+
+    if (!sender) {
+      client.emit('error', {
+        status: StatusCodes.Unauthorized,
+        message: 'Unauthorized',
+      })
+      return
+    }
+
+    const receiver = await this.prisma.user.findUnique({
+      where: { id: receiverId },
+    })
+
+    if (!receiver) {
+      client.emit('error', {
+        status: StatusCodes.NotFound,
+        message: 'Receiver not found',
+      })
+      return
+    }
+
+    if (!this.isCallAllowed(sender.role, receiver.role)) {
+      client.emit('error', {
+        status: StatusCodes.Forbidden,
+        message: 'You are not allowed to call this user',
+      })
+      return
+    }
+
+    if (!this.onlineUsers.has(receiverId)) {
+      client.emit('error', {
+        status: StatusCodes.UnprocessableEntity,
+        message: 'Receiver is not online',
+      })
+
+      await this.realtimeService.logCall({
+        callerId: sender.sub,
+        receiverId: receiverId,
+        callStatus: 'MISSED',
+      })
+
+      return
+    }
+
+    await this.realtimeService.logCall({
+      callerId: sender.sub,
+      receiverId: receiverId,
+      callStatus: 'INITIATED',
+    })
+
+    this.server.to(this.onlineUsers.get(receiverId)).emit('incoming_call', { callerId: sender.sub })
+    client.emit('call_made', { status: StatusCodes.OK, message: 'Call initiated' })
+  }
+
+  @SubscribeMessage('answer_call')
+  async handleAnswerCall(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() { callerId }: CallerDTO,
+  ) {
+    const receiver = this.clients.get(client)
+
+    if (!receiver) {
+      client.emit('error', {
+        status: StatusCodes.Unauthorized,
+        message: 'Unauthorized',
+      })
+      return
+    }
+
+    if (!this.onlineUsers.has(callerId)) {
+      client.emit('error', {
+        status: StatusCodes.NotFound,
+        message: 'Caller is not online',
+      })
+      return
+    }
+
+    await this.realtimeService.logCall({
+      callerId: callerId,
+      receiverId: receiver.sub,
+      callStatus: 'ANSWERED',
+    })
+
+    this.server.to(this.onlineUsers.get(callerId)).emit('call_answered', { receiverId: receiver.sub })
+    client.emit('call_answered', { status: StatusCodes.OK, message: 'Call answered' })
+  }
+
+  @SubscribeMessage('reject_call')
+  async handleRejectCall(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() { callerId }: CallerDTO,
+  ) {
+    const receiver = this.clients.get(client)
+
+    if (!receiver) {
+      client.emit('error', {
+        status: StatusCodes.Unauthorized,
+        message: 'Unauthorized',
+      })
+      return
+    }
+
+    if (!this.onlineUsers.has(callerId)) {
+      client.emit('error', {
+        status: StatusCodes.NotFound,
+        message: 'Caller is not online',
+      })
+      return
+    }
+
+    await this.realtimeService.logCall({
+      callerId: callerId,
+      receiverId: receiver.sub,
+      callStatus: 'REJECTED',
+    })
+
+    this.server.to(this.onlineUsers.get(callerId)).emit('call_rejected', { receiverId: receiver.sub })
+    client.emit('call_rejected', { status: StatusCodes.OK, message: 'Call rejected' })
+  }
+
+  @SubscribeMessage('receive_call')
+  async handleReceiveCall(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() { callerId }: CallerDTO,
+  ) {
+    const receiver = this.clients.get(client)
+
+    if (!receiver) {
+      client.emit('error', {
+        status: StatusCodes.Unauthorized,
+        message: 'Unauthorized',
+      })
+      return
+    }
+
+    if (!this.onlineUsers.has(callerId)) {
+      client.emit('error', {
+        status: StatusCodes.NotFound,
+        message: 'Caller is not online',
+      })
+      return
+    }
+
+    await this.realtimeService.logCall({
+      callerId: callerId,
+      receiverId: receiver.sub,
+      callStatus: 'RECEIVED',
+    })
+
+    this.server.to(this.onlineUsers.get(callerId)).emit('call_received', { receiverId: receiver.sub })
+    client.emit('call_received', { status: StatusCodes.OK, message: 'Call received' })
+  }
+
+  @SubscribeMessage('end_call')
+  async handleEndCall(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() { receiverId }: { receiverId: string },
+  ) {
+    const caller = this.clients.get(client)
+
+    if (!caller) {
+      client.emit('error', {
+        status: StatusCodes.Unauthorized,
+        message: 'Unauthorized',
+      })
+      return
+    }
+
+    if (!this.onlineUsers.has(receiverId)) {
+      client.emit('error', {
+        status: StatusCodes.NotFound,
+        message: 'Receiver is not online',
+      })
+      return
+    }
+
+    await this.realtimeService.logCall({
+      callerId: caller.sub,
+      receiverId: receiverId,
+      callStatus: 'ENDED',
+    })
+
+    this.server.to(this.onlineUsers.get(receiverId)).emit('call_ended', { callerId: caller.sub })
+    client.emit('call_ended', { status: StatusCodes.OK, message: 'Call ended' })
   }
 
   // TODO: fetch users (driver-passenger)

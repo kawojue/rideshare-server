@@ -41,7 +41,7 @@ export class OnlineStatusDTO {
     targetUserId: string
 }
 
-export class GetInboxDTO {
+export class ReceiverDTO {
     @ApiProperty({
         example: uuidv4()
     })
@@ -57,4 +57,13 @@ export class FetchMessagesDTO {
     @IsString()
     @IsNotEmpty()
     inboxId: string
+}
+
+export class CallerDTO {
+    @ApiProperty({
+        example: uuidv4()
+    })
+    @IsString()
+    @IsNotEmpty()
+    callerId: string
 }
