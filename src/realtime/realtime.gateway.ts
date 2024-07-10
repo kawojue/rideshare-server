@@ -187,8 +187,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       },
     })
 
-    client.emit('message_sent', message)
-    this.server.to(receiver.id).emit('new_message', message)
+    const alignedMessage = {
+      ...message,
+      alignment: 'right',
+    }
+
+    client.emit('message_sent', alignedMessage)
+    this.server.to(receiver.id).emit('new_message', { ...message, alignment: 'left' })
   }
 
   @SubscribeMessage('check_online_status')
@@ -260,11 +265,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
         ],
       },
       include: {
-        messages: {
-          select: {
-            read: true
-          }
-        },
+        messages: { take: 1, orderBy: { updatedAt: 'asc' } },
         user: {
           select: {
             id: true,
@@ -287,13 +288,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       },
     })
 
-    const inboxesWithUnreadCounts = inboxes.map(inbox => {
-      const unreadCount = inbox.messages.filter(message => !message.read).length
+    const inboxesWithUnreadCounts = await Promise.all(inboxes.map(async (inbox) => {
+      const unreadCount = await this.prisma.message.count({
+        where: { inboxId: inbox.id, read: false }
+      })
       return {
         ...inbox,
         unreadCount
       }
-    })
+    }))
 
     client.emit('inboxes', inboxesWithUnreadCounts)
   }
@@ -349,7 +352,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
         ]
       },
       include: {
-        messages: true,
         user: {
           select: {
             id: true,
@@ -399,12 +401,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
-    const inbox = await this.prisma.inbox.findUnique({
-      where: { id: inboxId },
-      include: {
-        messages: true,
-      },
-    })
+    const inbox = await this.realtimeService.getInbox(inboxId)
 
     if (!inbox) {
       client.emit('error', {
@@ -434,38 +431,21 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
+    const messages = await this.prisma.message.findMany({
+      where: { inboxId: inbox.id }
+    })
+
+    const messagesWithAlignment = messages.map(message => ({
+      ...message,
+      alignment: message.userSenderId === sender.sub || message.modminSenderId === sender.sub ? 'right' : 'left'
+    }))
+
+    client.emit('messages', { inbox, messages: messagesWithAlignment })
+
     await this.prisma.message.updateMany({
       where: { inboxId: inbox.id, read: false },
       data: { read: true },
     })
-
-    const updatedInbox = await this.prisma.inbox.findUnique({
-      where: { id: inboxId },
-      include: {
-        messages: true,
-        user: {
-          select: {
-            id: true,
-            role: true,
-            profile: {
-              select: {
-                avatar: true,
-              },
-            },
-            fullname: true,
-          },
-        },
-        modmin: {
-          select: {
-            id: true,
-            role: true,
-            fullname: true,
-          },
-        },
-      },
-    })
-
-    client.emit('messages', updatedInbox)
   }
 
   private isCommunicationAllowed(senderRole: Role, receiverRole: Role): boolean {

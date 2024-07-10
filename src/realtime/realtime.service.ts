@@ -60,6 +60,34 @@ export class RealtimeService {
     }
   }
 
+  async getInbox(inboxId: string) {
+    return await this.prisma.inbox.findUnique({
+      where: { id: inboxId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            role: true,
+            profile: {
+              select: {
+                avatar: true,
+
+              }
+            },
+            fullname: true,
+          }
+        },
+        modmin: {
+          select: {
+            id: true,
+            role: true,
+            fullname: true,
+          }
+        },
+      },
+    })
+  }
+
   async logCall(data: {
     callerId: string
     receiverId: string
