@@ -7,7 +7,7 @@ import {
   ResetPasswordDTO,
   UpdatePasswordDTO,
   BiometricLoginDTO,
-  EmergencyContractDTO,
+  EmergencyContactDTO,
 } from './dto/auth.dto'
 import {
   Get,
@@ -166,7 +166,7 @@ export class AuthController {
   async emergencyContact(
     @Req() req: IRequest,
     @Res() res: Response,
-    @Body() body: EmergencyContractDTO,
+    @Body() body: EmergencyContactDTO,
   ) {
     await this.authService.emergencyContact(res, req.user, body)
   }

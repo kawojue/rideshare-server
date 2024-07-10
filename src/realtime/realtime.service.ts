@@ -1,5 +1,5 @@
 import { Server } from 'socket.io'
-import { CallLog, CallStatus } from '@prisma/client'
+import { CallStatus } from '@prisma/client'
 import { Injectable } from '@nestjs/common'
 import { StatusCodes } from 'enums/statusCodes'
 import { PrismaService } from 'prisma/prisma.service'
@@ -64,30 +64,20 @@ export class RealtimeService {
     callerId: string
     receiverId: string
     callStatus: CallStatus
-  }): Promise<CallLog> {
-    const existingCall = await this.prisma.callLog.findFirst({
-      where: {
+  }) {
+    return this.prisma.callLog.create({
+      data: {
         callerId: data.callerId,
-        receiverId: data.receiverId
+        receiverId: data.receiverId,
+        callStatus: data.callStatus,
       },
     })
+  }
 
-    if (existingCall) {
-      return this.prisma.callLog.update({
-        where: { id: existingCall.id },
-        data: {
-          callStatus: data.callStatus,
-          updatedAt: new Date(),
-        },
-      })
-    } else {
-      return this.prisma.callLog.create({
-        data: {
-          caller: { connect: { id: data.callerId } },
-          receiver: { connect: { id: data.receiverId } },
-          callStatus: data.callStatus,
-        },
-      })
-    }
+  async updateCallStatus(callId: string, status: CallStatus) {
+    return this.prisma.callLog.update({
+      where: { id: callId },
+      data: { callStatus: status },
+    })
   }
 }

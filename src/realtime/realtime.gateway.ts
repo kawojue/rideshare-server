@@ -42,7 +42,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     private readonly realtimeService: RealtimeService,
   ) { }
 
-  private clients: Map<Socket, { sub: string, role: Role }> = new Map()
+  private clients: Map<Socket, JwtPayload> = new Map()
   private onlineUsers: Map<string, string> = new Map()
 
   afterInit() {
@@ -52,7 +52,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
   async handleConnection(client: Socket) {
     const token = client.handshake.headers['authorization']?.split('Bearer ')[1]
     if (!token) {
-      client.emit('unauthorized', {
+      client.emit('error', {
         status: StatusCodes.Unauthorized,
         message: 'Token does not exist'
       })
@@ -60,15 +60,23 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     }
 
     try {
-      const { sub, role } = await this.jwtService.verifyAsync(token, {
+      const { sub, role, status } = await this.jwtService.verifyAsync(token, {
         secret: process.env.JWT_SECRET,
         ignoreExpiration: false,
-      })
+      }) as JwtPayload
 
-      this.clients.set(client, { sub, role })
+      if (status === "SUSPENDED") {
+        client.emit('error', {
+          status: StatusCodes.Forbidden,
+          message: 'Account has been suspended'
+        })
+        return
+      }
+
+      this.clients.set(client, { sub, role, status })
       this.onlineUsers.set(sub, client.id)
 
-      client.emit('connected', { status: StatusCodes.OK, message: 'Connected' })
+      client.emit('connected', { message: 'Connected' })
     } catch (err) {
       client.emit('error', {
         status: StatusCodes.InternalServerError,
@@ -527,29 +535,23 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
-    if (!this.onlineUsers.has(receiverId)) {
-      client.emit('error', {
-        status: StatusCodes.UnprocessableEntity,
-        message: 'Receiver is not online',
-      })
-
-      await this.realtimeService.logCall({
-        callerId: sender.sub,
-        receiverId: receiverId,
-        callStatus: 'MISSED',
-      })
-
-      return
-    }
-
-    await this.realtimeService.logCall({
+    const log = await this.realtimeService.logCall({
       callerId: sender.sub,
       receiverId: receiverId,
       callStatus: 'INITIATED',
     })
 
-    this.server.to(this.onlineUsers.get(receiverId)).emit('incoming_call', { callerId: sender.sub })
-    client.emit('call_made', { status: StatusCodes.OK, message: 'Call initiated' })
+    if (!this.onlineUsers.has(receiverId)) {
+      await this.realtimeService.updateCallStatus(log.id, 'MISSED')
+      client.emit('error', {
+        status: StatusCodes.UnprocessableEntity,
+        message: 'Receiver is not online',
+      })
+      return
+    }
+
+    this.server.to(this.onlineUsers.get(receiverId)).emit('incoming_call', { log })
+    client.emit('call_made', { message: 'Call initiated', log })
   }
 
   @SubscribeMessage('answer_call')
@@ -567,6 +569,27 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
+    const log = await this.prisma.callLog.findFirst({
+      where: {
+        callerId,
+        receiverId: receiver.sub,
+        callStatus: 'INITIATED',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+
+    if (!log) {
+      client.emit('error', {
+        status: StatusCodes.NotFound,
+        message: 'Call log not found',
+      })
+      return
+    }
+
+    await this.realtimeService.updateCallStatus(log.id, 'ANSWERED')
+
     if (!this.onlineUsers.has(callerId)) {
       client.emit('error', {
         status: StatusCodes.NotFound,
@@ -575,14 +598,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
-    await this.realtimeService.logCall({
-      callerId: callerId,
-      receiverId: receiver.sub,
-      callStatus: 'ANSWERED',
-    })
-
-    this.server.to(this.onlineUsers.get(callerId)).emit('call_answered', { receiverId: receiver.sub })
-    client.emit('call_answered', { status: StatusCodes.OK, message: 'Call answered' })
+    this.server.to(this.onlineUsers.get(callerId)).emit('call_answered', { log })
+    client.emit('call_answered', { message: 'Call answered', log })
   }
 
   @SubscribeMessage('reject_call')
@@ -600,38 +617,26 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
-    if (!this.onlineUsers.has(callerId)) {
-      client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Caller is not online',
-      })
-      return
-    }
-
-    await this.realtimeService.logCall({
-      callerId: callerId,
-      receiverId: receiver.sub,
-      callStatus: 'REJECTED',
+    const log = await this.prisma.callLog.findFirst({
+      where: {
+        callerId,
+        receiverId: receiver.sub,
+        callStatus: 'INITIATED',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
     })
 
-    this.server.to(this.onlineUsers.get(callerId)).emit('call_rejected', { receiverId: receiver.sub })
-    client.emit('call_rejected', { status: StatusCodes.OK, message: 'Call rejected' })
-  }
-
-  @SubscribeMessage('receive_call')
-  async handleReceiveCall(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() { callerId }: CallerDTO,
-  ) {
-    const receiver = this.clients.get(client)
-
-    if (!receiver) {
+    if (!log) {
       client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
+        status: StatusCodes.NotFound,
+        message: 'Call log not found',
       })
       return
     }
+
+    await this.realtimeService.updateCallStatus(log.id, 'REJECTED')
 
     if (!this.onlineUsers.has(callerId)) {
       client.emit('error', {
@@ -641,14 +646,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
-    await this.realtimeService.logCall({
-      callerId: callerId,
-      receiverId: receiver.sub,
-      callStatus: 'RECEIVED',
-    })
-
-    this.server.to(this.onlineUsers.get(callerId)).emit('call_received', { receiverId: receiver.sub })
-    client.emit('call_received', { status: StatusCodes.OK, message: 'Call received' })
+    this.server.to(this.onlineUsers.get(callerId)).emit('call_rejected', { log })
+    client.emit('call_rejected', { message: 'Call rejected', log })
   }
 
   @SubscribeMessage('end_call')
@@ -666,6 +665,27 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
+    const log = await this.prisma.callLog.findFirst({
+      where: {
+        callerId: caller.sub,
+        receiverId,
+        callStatus: 'ANSWERED',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+
+    if (!log) {
+      client.emit('error', {
+        status: StatusCodes.NotFound,
+        message: 'Call log not found',
+      })
+      return
+    }
+
+    await this.realtimeService.updateCallStatus(log.id, 'ENDED')
+
     if (!this.onlineUsers.has(receiverId)) {
       client.emit('error', {
         status: StatusCodes.NotFound,
@@ -674,14 +694,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
-    await this.realtimeService.logCall({
-      callerId: caller.sub,
-      receiverId: receiverId,
-      callStatus: 'ENDED',
-    })
-
-    this.server.to(this.onlineUsers.get(receiverId)).emit('call_ended', { callerId: caller.sub })
-    client.emit('call_ended', { status: StatusCodes.OK, message: 'Call ended' })
+    this.server.to(this.onlineUsers.get(receiverId)).emit('call_ended', { log })
+    client.emit('call_ended', { message: 'Call ended', log })
   }
 
   @SubscribeMessage('fetch_call_logs')
@@ -698,8 +712,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
 
     const logs = await this.prisma.callLog.findMany({
       where: {
-        callerId: user.sub,
-        receiverId: user.sub,
+        OR: [
+          { callerId: user.sub },
+          { receiverId: user.sub },
+        ]
       },
       include: {
         caller: {
@@ -730,7 +746,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       orderBy: { updatedAt: 'desc' }
     })
 
-    client.emit('call_logs', logs)
+    client.emit('call_logs', { logs })
   }
 
   // TODO: fetch users (driver-passenger)

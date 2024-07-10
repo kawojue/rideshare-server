@@ -7,7 +7,7 @@ import {
     ResetPasswordDTO,
     UpdatePasswordDTO,
     BiometricLoginDTO,
-    EmergencyContractDTO,
+    EmergencyContactDTO,
 } from './dto/auth.dto'
 import { v4 as uuidv4 } from 'uuid'
 import { JwtService } from '@nestjs/jwt'
@@ -627,7 +627,7 @@ export class AuthService {
     async emergencyContact(
         res: Response,
         { sub: userId }: ExpressUser,
-        { name, phone }: EmergencyContractDTO
+        { name, phone }: EmergencyContactDTO
     ) {
         phone = normalizePhoneNumber(phone)
         const profile = await this.prisma.getProfile(userId)

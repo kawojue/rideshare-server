@@ -179,7 +179,7 @@ export class PinDTO {
     otp: string
 }
 
-export class EmergencyContractDTO {
+export class EmergencyContactDTO {
     @IsString()
     @IsNotEmpty()
 
