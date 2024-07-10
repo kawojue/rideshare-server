@@ -629,7 +629,6 @@ export class AuthService {
         { sub: userId }: ExpressUser,
         { name, phone }: EmergencyContactDTO
     ) {
-        phone = normalizePhoneNumber(phone)
         const profile = await this.prisma.getProfile(userId)
 
         const contact = await this.prisma.emergencyContact.upsert({

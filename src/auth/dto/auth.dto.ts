@@ -8,6 +8,7 @@ import {
 import { ApiProperty } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import { titleText, toLowerCase } from 'helpers/transformer'
+import { normalizePhoneNumber } from 'helpers/generators'
 
 export class EmailDTO {
     @ApiProperty({ example: 'kawojue08@gmail.com' })
@@ -180,9 +181,12 @@ export class PinDTO {
 }
 
 export class EmergencyContactDTO {
+    @ApiProperty({
+        example: 'Raheem Kawojue'
+    })
     @IsString()
     @IsNotEmpty()
-
+    @Transform(({ value }) => titleText(value))
     name: string
 
     @ApiProperty({
@@ -190,5 +194,6 @@ export class EmergencyContactDTO {
     })
     @IsString()
     @IsNotEmpty()
+    @Transform(({ value }) => normalizePhoneNumber(value))
     phone: string
 }
