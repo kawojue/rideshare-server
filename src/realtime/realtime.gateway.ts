@@ -696,12 +696,20 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
+    const currentDate = new Date()
+    const sevenDaysAgo = new Date(currentDate)
+    sevenDaysAgo.setDate(currentDate.getDate() - 7)
+
     const logs = await this.prisma.callLog.findMany({
       where: {
         OR: [
           { callerId: user.sub },
           { receiverId: user.sub },
-        ]
+        ],
+        updatedAt: {
+          gte: sevenDaysAgo,
+          lte: currentDate,
+        },
       },
       include: {
         caller: {
