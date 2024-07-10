@@ -227,6 +227,14 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
+    if (user.role === Role.MODERATOR || user.role === Role.ADMIN) {
+      client.emit('error', {
+        status: StatusCodes.Forbidden,
+        message: 'Not allowed',
+      })
+      return
+    }
+
     const adminsAndModerators = await this.prisma.user.findMany({
       where: {
         OR: [
