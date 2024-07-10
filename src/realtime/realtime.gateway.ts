@@ -588,7 +588,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
-    await this.realtimeService.updateCallStatus(log.id, 'ANSWERED')
+    await Promise.all([
+      this.realtimeService.updateCallStatus(log.id, 'ANSWERED'),
+      this.realtimeService.setStartTime(log.id),
+    ])
 
     if (!this.onlineUsers.has(callerId)) {
       client.emit('error', {
@@ -684,7 +687,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       return
     }
 
-    await this.realtimeService.updateCallStatus(log.id, 'ENDED')
+    await Promise.all([
+      this.realtimeService.updateCallStatus(log.id, 'ENDED'),
+      this.realtimeService.setEndTime(log.id)
+    ])
 
     if (!this.onlineUsers.has(receiverId)) {
       client.emit('error', {
@@ -746,7 +752,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       orderBy: { updatedAt: 'desc' }
     })
 
-    client.emit('call_logs', { logs })
+    const logsWithDuration = logs.map(log => {
+      const duration = log.startTime && log.endTime ? (log.endTime.getTime() - log.startTime.getTime()) / 1000 : null
+      return { ...log, duration }
+    })
+
+    client.emit('call_logs', { logs: logsWithDuration })
   }
 
   // TODO: fetch users (driver-passenger)

@@ -80,4 +80,18 @@ export class RealtimeService {
       data: { callStatus: status },
     })
   }
+
+  async setStartTime(callId: string) {
+    return this.prisma.callLog.update({
+      where: { id: callId },
+      data: { startTime: new Date() },
+    })
+  }
+
+  async setEndTime(callId: string) {
+    return this.prisma.callLog.update({
+      where: { id: callId },
+      data: { endTime: new Date() },
+    })
+  }
 }
