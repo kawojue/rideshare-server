@@ -30,7 +30,7 @@ export class UserService {
             }
 
             if (user.role !== "DRIVER" || role !== "PASSENGER") {
-                return this.response.sendError(res, StatusCodes.BadRequest, "Passenger can only rate driver")
+                return this.response.sendError(res, StatusCodes.BadRequest, "Only passenger can rate driver")
             }
 
             const rating = await this.prisma.rating.create({
@@ -58,6 +58,8 @@ export class UserService {
         try {
             limit = Number(limit)
             const offset = (Number(page) - 1) * limit
+
+            console.log(point)
 
             const ratingsCount = await this.prisma.rating.count({
                 where: { targetUserId: userId }
@@ -185,7 +187,6 @@ export class UserService {
     async deleteRating(
         res: Response,
         ratingId: string,
-        { sub, role }: ExpressUser,
     ) {
         try {
             const existingRating = await this.prisma.rating.findUnique({
@@ -196,15 +197,14 @@ export class UserService {
                 return this.response.sendError(res, StatusCodes.NotFound, "Rating not found")
             }
 
-            if ((role !== "admin") && (existingRating.raterUserId !== sub)) {
-                return this.response.sendError(res, StatusCodes.Forbidden, "You are not authorized to delete this rating")
-            }
-
-            await this.prisma.rating.delete({
+            const rating = await this.prisma.rating.delete({
                 where: { id: ratingId },
             })
 
-            this.response.sendSuccess(res, StatusCodes.OK, { message: "Rating deleted successfully" })
+            this.response.sendSuccess(res, StatusCodes.OK, {
+                data: rating,
+                message: "Rating deleted successfully"
+            })
         } catch (err) {
             this.misc.handleServerError(res, err)
         }

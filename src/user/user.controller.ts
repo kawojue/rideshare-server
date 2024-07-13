@@ -46,14 +46,10 @@ export class UserController {
   }
 
   @ApiBearerAuth()
+  @Roles(Role.ADMIN)
   @UseGuards(JwtRoleAuthGuard)
-  @Roles(Role.PASSENGER, Role.ADMIN)
   @Delete('/rating/remove/:ratingId')
-  async deleteRating(
-    @Req() req: IRequest,
-    @Res() res: Response,
-    @Param('ratingId') ratingId: string
-  ) {
-    await this.userService.deleteRating(res, ratingId, req.user)
+  async deleteRating(@Res() res: Response, @Param('ratingId') ratingId: string) {
+    await this.userService.deleteRating(res, ratingId)
   }
 }

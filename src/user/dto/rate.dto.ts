@@ -1,10 +1,10 @@
 import { RatingPoint } from 'enums/base'
 import { ApiProperty } from '@nestjs/swagger'
+import { Transform } from 'class-transformer'
 import { InfiniteScrollDTO } from './pagination.dto'
 import {
     IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength
 } from 'class-validator'
-import { Transform } from 'class-transformer'
 
 export class RatingDTO {
     @ApiProperty({
@@ -18,20 +18,24 @@ export class RatingDTO {
     review?: string
 
     @ApiProperty({
-        enum: RatingPoint,
-        description: 'It should either be 0NE, TWO, THREE, FOUR, FIVE - this stops overloading within the valid range'
+        example: "ONE",
     })
     @IsNotEmpty()
-    @IsEnum(RatingPoint)
+    @IsEnum(RatingPoint, {
+        message: "point must be one of the following values: 0NE, TWO, THREE, FOUR, FIVE"
+    })
+    @Transform(({ value }) => Number(RatingPoint[value]))
     point: RatingPoint
 }
 
 export class FetchRatingAndReviewsDTO extends InfiniteScrollDTO {
     @ApiProperty({
-        enum: RatingPoint,
-        description: 'It should either be 0NE, TWO, THREE, FOUR, FIVE - this stops overloading within the valid range'
+        example: "THREE",
     })
     @IsOptional()
-    @IsEnum(RatingPoint)
+    @IsEnum(RatingPoint, {
+        message: "point must be one of the following values: 0NE, TWO, THREE, FOUR, FIVE"
+    })
+    @Transform(({ value }) => Number(RatingPoint[value]))
     point: RatingPoint
 }
