@@ -21,6 +21,7 @@ import { Server, Socket } from 'socket.io'
 import { StatusCodes } from 'enums/statusCodes'
 import { RealtimeService } from './realtime.service'
 import { PrismaService } from 'prisma/prisma.service'
+import { formatDuration } from 'helpers/transformer'
 
 @WebSocketGateway({
   transports: ['polling', 'websocket'],
@@ -729,6 +730,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
                 avatar: true,
               }
             },
+            phone: true,
+            email: true,
             fullname: true,
           }
         },
@@ -741,6 +744,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
                 avatar: true,
               }
             },
+            phone: true,
+            email: true,
             fullname: true,
           }
         }
@@ -749,8 +754,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     })
 
     const logsWithDuration = logs.map(log => {
-      const duration = log.startTime && log.endTime ? (log.endTime.getTime() - log.startTime.getTime()) / 1000 : null
-      return { ...log, duration }
+      const durationInSeconds = log.startTime && log.endTime ? (log.endTime.getTime() - log.startTime.getTime()) / 1000 : null
+
+      const formattedDuration = formatDuration(durationInSeconds)
+
+      return { ...log, duration: formattedDuration }
     })
 
     client.emit('call_logs', { logs: logsWithDuration })

@@ -33,6 +33,20 @@ export const formatDate = (date: Date | string): string => {
     return `${year}-${month}-${day}`
 }
 
+export const formatDuration = (seconds: number | null): string => {
+    if (seconds === null) return null
+
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = Math.floor(seconds % 60)
+
+    const hStr = h > 0 ? `${h}h` : ''
+    const mStr = m > 0 ? `${m}m` : ''
+    const sStr = s > 0 ? `${s}s` : ''
+
+    return `${hStr} ${mStr} ${sStr}`.trim()
+}
+
 export const extractFirstAndLastName = (fullName: string): { firstName: string, lastName: string } => {
     fullName = fullName.trim()
 
