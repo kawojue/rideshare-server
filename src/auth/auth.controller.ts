@@ -149,8 +149,8 @@ export class AuthController {
   @UseGuards(JwtRoleAuthGuard)
   @ApiConsumes('multipart/form-data')
   @Roles(Role.DRIVER, Role.PASSENGER)
-  @ApiOperation({ summary: 'The form-data key should be avatar' })
   @UseInterceptors(FileInterceptor('avatar'))
+  @ApiOperation({ summary: 'The form-data key should be avatar' })
   async uploadAvatar(
     @Req() req: IRequest,
     @Res() res: Response,
