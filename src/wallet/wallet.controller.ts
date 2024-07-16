@@ -105,10 +105,10 @@ export class WalletController {
     await this.walletService.initiateWithdrawal(req, res, linkedBankId, body)
   }
 
+  @Post('/paystack/webhook')
   @ApiOperation({
     summary: "Ignore. It's for Transfer Webhook"
   })
-  @Post('/paystack/webhook')
   async manageFiatEvents(@Req() req: Request) {
     if (!req.body || !req.body?.event || !req.body?.data) {
       throw new BadRequestException('Invalid request body received')

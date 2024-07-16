@@ -25,8 +25,8 @@ export class UserController {
 
   @ApiBearerAuth()
   @Roles(Role.PASSENGER)
-  @Post('rating/rate/:driverId')
   @UseGuards(JwtRoleAuthGuard)
+  @Post('rating/rate/:driverId')
   async rateRider(
     @Req() req: IRequest,
     @Res() res: Response,
