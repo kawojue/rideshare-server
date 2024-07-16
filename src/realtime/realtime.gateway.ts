@@ -20,8 +20,8 @@ import { JwtService } from '@nestjs/jwt'
 import { Server, Socket } from 'socket.io'
 import { StatusCodes } from 'enums/statusCodes'
 import { RealtimeService } from './realtime.service'
-import { PrismaService } from 'prisma/prisma.service'
 import { formatDuration } from 'helpers/transformer'
+import { PrismaService } from 'prisma/prisma.service'
 
 @WebSocketGateway({
   transports: ['polling', 'websocket'],
