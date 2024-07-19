@@ -95,9 +95,9 @@ export class RealtimeService {
   }) {
     return this.prisma.callLog.create({
       data: {
-        callerId: data.callerId,
-        receiverId: data.receiverId,
         callStatus: data.callStatus,
+        caller: { connect: { id: data.callerId } },
+        receiver: { connect: { id: data.receiverId } },
       },
     })
   }
