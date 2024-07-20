@@ -25,7 +25,9 @@ CREATE TYPE "CallStatus" AS ENUM ('INITIATED', 'ANSWERED', 'REJECTED', 'RECEIVED
 -- CreateTable
 CREATE TABLE "User" (
     "id" UUID NOT NULL,
-    "fullname" TEXT NOT NULL,
+    "firstname" TEXT NOT NULL,
+    "lastname" TEXT NOT NULL,
+    "middlename" TEXT,
     "status" "Status" NOT NULL DEFAULT 'ACTIVE',
     "provider" "Provider" NOT NULL,
     "email" TEXT NOT NULL,
@@ -214,7 +216,10 @@ CREATE TABLE "Wallet" (
 CREATE TABLE "Modmin" (
     "id" UUID NOT NULL,
     "fullname" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "avatar" TEXT,
     "refresh_token" TEXT,
+    "password" TEXT NOT NULL,
     "role" "Role" NOT NULL,
     "status" "Status" NOT NULL DEFAULT 'ACTIVE',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -325,6 +330,9 @@ CREATE UNIQUE INDEX "TxHistory_reference_key" ON "TxHistory"("reference");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Wallet_userId_key" ON "Wallet"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Modmin_email_key" ON "Modmin"("email");
 
 -- CreateIndex
 CREATE INDEX "Modmin_refresh_token_idx" ON "Modmin"("refresh_token");
