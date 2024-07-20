@@ -105,19 +105,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     }
 
     async profileSetup(userId: string) {
-        const user = await this.user.findUnique({
-            where: { id: userId },
-            select: { role: true }
-        })
         const profile = await this.getProfile(userId)
-
-        const emergencyContact = await this.emergencyContact.findUnique({
-            where: { profileId: profile.id }
-        })
-
-        const verification = await this.verification.findUnique({
-            where: { driverId: userId }
-        })
+        const [user, emergencyContact, verification] = await Promise.all([
+            this.user.findUnique({
+                where: { id: userId },
+                select: { role: true }
+            }),
+            this.emergencyContact.findUnique({
+                where: { profileId: profile.id }
+            }),
+            this.verification.findUnique({
+                where: { driverId: userId }
+            })
+        ])
 
         return {
             hasCreatedTransactionPin: profile.pin !== null,

@@ -8,6 +8,7 @@ import { AppController } from './app.controller'
 import { PrismaService } from 'prisma/prisma.service'
 import { DriverModule } from './driver/driver.module'
 import { WalletModule } from './wallet/wallet.module'
+import { ModminModule } from './modmin/modmin.module'
 import { ResponseService } from 'libs/response.service'
 import { RealtimeModule } from './realtime/realtime.module'
 import cloudinaryConfig from './cloudinary/cloudinary.config'
@@ -24,6 +25,7 @@ import { RateLimiterMiddleware } from './middlewares/rate-limit.middleware'
     DriverModule,
     WalletModule,
     RealtimeModule,
+    ModminModule,
   ],
   controllers: [AppController],
   providers: [
