@@ -95,6 +95,11 @@ export class AuthService {
             status: user.status
         } as JwtPayload
 
+        await this.prisma.profile.update({
+            where: { userId: user.id, email_verified: false },
+            data: { email_verified: true }
+        })
+
         const setup = await this.prisma.profileSetup(user.id)
 
         return { payload, setup, user }

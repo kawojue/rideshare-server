@@ -205,8 +205,10 @@ model Wallet {
 model Modmin {
   id            String   @id @default(uuid()) @db.Uuid
   fullname      String
+  email         String   @unique
   avatar        String?
   refresh_token String?
+  password      String
   role          Role
   status        Status   @default(ACTIVE)
   createdAt     DateTime @default(now())

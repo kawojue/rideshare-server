@@ -65,3 +65,8 @@ interface Fee {
     paystackFee: number
     processingFee: number
 }
+
+interface Avatar {
+    id: number
+    url: string
+}
