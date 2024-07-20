@@ -56,16 +56,16 @@ export class DriverService {
             })
 
             const formattedDob = formatDate(dob)
-            const full_name: string[] = toUpperCase(user.fullname).split(/[\s,]+/).filter(Boolean)
-            const { firstName, lastName } = extractFirstAndLastName(user.fullname)
+            const full_name: string[] = [toUpperCase(user.firstname), toUpperCase(user.lastname), toUpperCase(user.middlename)].filter(Boolean)
 
             await axios.post(
                 "https://api.verified.africa/sfx-verify/v3/id-service",
                 {
                     countryCode: 'NG',
                     dob: formattedDob,
-                    firstName, lastName,
                     searchParameter: driverLicenseId,
+                    lastName: toUpperCase(user.lastname),
+                    firstName: toUpperCase(user.firstname),
                     verificationType: "DRIVER-LICENSE-FULL-DETAIL-VERIFICATION",
                 },
                 {
@@ -79,7 +79,6 @@ export class DriverService {
                 let matchingNamesCount = 0
 
                 const license_full_name = toUpperCase(`${data?.first_name ?? ''} ${data?.middle_name ?? ''} ${data?.last_name ?? ''}`).split(/[\s,]+/).filter(Boolean)
-                const full_name: string[] = toUpperCase(user.fullname).split(/[\s,]+/).filter(Boolean)
 
                 for (const license_name of license_full_name) {
                     if (full_name.includes(license_name)) {

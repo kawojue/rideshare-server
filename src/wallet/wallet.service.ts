@@ -109,12 +109,17 @@ export class WalletService {
                 if (totalLinked === 0) {
                     const user = await this.prisma.user.findUnique({
                         where: { id: sub },
-                        select: { id: true, fullname: true },
+                        select: {
+                            id: true,
+                            lastname: true,
+                            firstname: true,
+                            middlename: true,
+                        },
                     })
 
                     let matchingNamesCount = 0
 
-                    const full_names = toUpperCase(user.fullname).split(/[\s,]+/).filter(Boolean)
+                    const full_names: string[] = [toUpperCase(user.firstname), toUpperCase(user.lastname), toUpperCase(user.middlename)].filter(Boolean)
                     const account_names = toUpperCase(details.account_name).split(/[\s,]+/).filter(Boolean)
 
                     for (const account_name of account_names) {

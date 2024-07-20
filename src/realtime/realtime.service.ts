@@ -74,7 +74,8 @@ export class RealtimeService {
 
               }
             },
-            fullname: true,
+            lastname: true,
+            firstname: true,
           }
         },
         modmin: {

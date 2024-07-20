@@ -1,7 +1,6 @@
 import { UserEnum } from 'enums/base'
 import { Gender } from '@prisma/client'
 import {
-    IsDateString,
     IsEmail, IsEnum, IsNotEmpty, IsOptional,
     IsString, Matches, MaxLength, MinLength,
 } from 'class-validator'
@@ -66,12 +65,29 @@ export class SigninDTO {
 
 export class SignupDTO extends EmailDTO {
     @ApiProperty({
-        example: 'Raheem Kawojue'
+        example: 'Raheem'
     })
     @IsString()
     @IsNotEmpty()
     @Transform(({ value }) => titleText(value))
-    fullname: string
+    firstname: string
+
+    @ApiProperty({
+        example: 'Kawojue'
+    })
+    @IsString()
+    @IsNotEmpty()
+    @Transform(({ value }) => titleText(value))
+    lastname: string
+
+    @ApiProperty({
+        example: 'Muyiwa'
+    })
+    @IsString()
+    @IsNotEmpty()
+    @IsOptional()
+    @Transform(({ value }) => titleText(value))
+    middlename: string
 
     @ApiProperty({
         enum: UserEnum

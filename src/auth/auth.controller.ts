@@ -70,7 +70,8 @@ export class AuthController {
         id: user.id,
         role: user.role,
         profile: user.profile,
-        fullname: user.fullname,
+        lastname: user.lastname,
+        firstname: user.firstname,
       }
     }
 

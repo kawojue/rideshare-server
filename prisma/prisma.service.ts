@@ -91,7 +91,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
                         role: true,
                         email: true,
                         phone: true,
-                        fullname: true,
+                        lastname: true,
+                        firstname: true,
                     }
                 }
             }

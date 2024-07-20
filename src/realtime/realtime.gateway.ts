@@ -284,7 +284,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
                 avatar: true,
               }
             },
-            fullname: true,
+            lastname: true,
+            firstname: true,
           }
         },
         modmin: {
@@ -371,7 +372,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
 
               }
             },
-            fullname: true,
+            lastname: true,
+            firstname: true,
           }
         },
         modmin: {
@@ -732,7 +734,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
             },
             phone: true,
             email: true,
-            fullname: true,
+            lastname: true,
+            firstname: true,
           }
         },
         receiver: {
@@ -746,7 +749,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
             },
             phone: true,
             email: true,
-            fullname: true,
+            lastname: true,
+            firstname: true,
           }
         }
       },

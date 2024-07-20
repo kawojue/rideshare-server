@@ -158,7 +158,8 @@ export class AuthService {
                 id: user.id,
                 role: user.role,
                 profile: user.profile,
-                fullname: user.fullname,
+                lastname: user.lastname,
+                firsname: user.firstname,
             }
         })
     }
@@ -220,14 +221,14 @@ export class AuthService {
                 id: user.id,
                 role: user.role,
                 profile: user.profile,
-                fullname: user.fullname,
+                firstname: user.firstname,
             }
         })
     }
 
     async signup(res: Response, {
-        gender, fullname, address,
-        as, email, password, phone,
+        gender, firstname, lastname, middlename,
+        as, email, password, phone, address,
     }: SignupDTO) {
         phone = normalizePhoneNumber(phone)
 
@@ -251,8 +252,8 @@ export class AuthService {
         const [user] = await this.prisma.$transaction([
             this.prisma.user.create({
                 data: {
-                    id: _id,
-                    fullname, provider: 'Local',
+                    id: _id, provider: 'Local',
+                    firstname, lastname, middlename,
                     email, phone, role: as, password,
                     profile: { create: { gender, address } },
                 }
