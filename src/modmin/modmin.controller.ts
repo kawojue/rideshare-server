@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   Patch,
   UseGuards,
   Controller,
@@ -15,12 +16,21 @@ import { Roles } from 'src/jwt/role.decorator'
 import { ModminService } from './modmin.service'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
+import { FetchModminsDTO } from 'src/app/dto/pagination.dto'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
 
 @ApiTags("Moderator & Admin")
-@Controller('modmin')
+@Controller('modmins')
 export class ModminController {
   constructor(private readonly modminService: ModminService) { }
+
+  @Get('/')
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN)
+  @UseGuards(JwtRoleAuthGuard)
+  async fetchModmins(@Res() res: Response, @Query() q: FetchModminsDTO) {
+    await this.modminService.fetchModmins(res, q)
+  }
 
   @Post('/login')
   async login(@Res() res: Response, @Body() body: LoginDTO) {

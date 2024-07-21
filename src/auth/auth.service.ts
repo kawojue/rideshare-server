@@ -64,6 +64,39 @@ export class AuthService {
         return access_token
     }
 
+    private async resendOtp(email_verified: boolean, email: string, userId: string) {
+        if (email_verified) {
+            const { totp, totp_expiry } = generateOTP(6)
+
+            const otp = await this.prisma.totp.findUnique({
+                where: { userId: userId },
+            })
+
+            const expired = otp ? new Date() > otp.totp_expiry : false
+
+            if ((!expired && !otp) || (expired && otp)) {
+                await Promise.all([
+                    this.prisma.totp.upsert({
+                        where: { userId: userId },
+                        create: {
+                            totp, totp_expiry,
+                            user: { connect: { id: userId } },
+                        },
+                        update: { totp, totp_expiry }
+                    }),
+                    this.isProd ? this.plunk.sendPlunkEmail({
+                        to: email,
+                        subject: 'Verify your email',
+                        body: `otp : ${totp}`
+                    }) : (() => {
+                        console.log(totp)
+                    })()
+                ])
+                // TODO: Email template
+            }
+        }
+    }
+
     async googleSignin(profile: any) {
         const { email, proverId } = profile.user
 
@@ -162,6 +195,10 @@ export class AuthService {
                 firsname: user.firstname,
             }
         })
+
+        res.on('finish', async () => {
+            this.resendOtp(user.profile.email_verified, user.email, user.id)
+        })
     }
 
     async biometricSignin(res: Response, { access_token: accessToken }: BiometricLoginDTO) {
@@ -223,6 +260,10 @@ export class AuthService {
                 profile: user.profile,
                 firstname: user.firstname,
             }
+        })
+
+        res.on('finish', async () => {
+            this.resendOtp(user.profile.email_verified, user.email, user.id)
         })
     }
 

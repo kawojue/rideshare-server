@@ -16,12 +16,24 @@ import { UserService } from './user.service'
 import { Roles } from 'src/jwt/role.decorator'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
+import { FetchUsersDTO } from 'src/app/dto/pagination.dto'
 import { FetchRatingAndReviewsDTO, RatingDTO } from './dto/rate.dto'
 
 @ApiTags("User")
-@Controller('user')
+@Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) { }
+
+  @Get('/')
+  @ApiBearerAuth()
+  @UseGuards(JwtRoleAuthGuard)
+  async fetchUsers(
+    @Res() res: Response,
+    @Res() req: IRequest,
+    @Query() q: FetchUsersDTO
+  ) {
+    await this.userService.fetchUsers(res, q, req.user)
+  }
 
   @ApiBearerAuth()
   @Roles(Role.PASSENGER)

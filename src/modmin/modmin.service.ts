@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { avatars } from 'utils/avatars'
 import { Injectable } from '@nestjs/common'
+import { Modmin, User } from '@prisma/client'
 import { StatusCodes } from 'enums/statusCodes'
 import { MiscService } from 'libs/misc.service'
 import { titleText } from 'helpers/transformer'
@@ -8,8 +9,8 @@ import { PlunkService } from 'libs/plunk.service'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
 import { EncryptionService } from 'libs/encryption.service'
+import { FetchModminsDTO } from 'src/app/dto/pagination.dto'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
-import { Modmin, User } from '@prisma/client'
 
 @Injectable()
 export class ModminService {
@@ -168,5 +169,77 @@ export class ModminService {
         })
 
         this.response.sendSuccess(res, StatusCodes.OK, { data: acc })
+    }
+
+    async fetchModmins(
+        res: Response,
+        {
+            role,
+            page = 1,
+            limit = 50,
+            search = '',
+        }: FetchModminsDTO
+    ) {
+        try {
+            page = Number(page)
+            limit = Number(limit)
+
+            if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+                return this.response.sendError(res, StatusCodes.BadRequest, "Invalid pagination query")
+            }
+
+            const offset = (page - 1) * limit
+
+            const [modmins, total] = await this.prisma.$transaction([
+                this.prisma.modmin.findMany({
+                    where: {
+                        role: role ? role : { in: ['ADMIN', 'MODERATOR'] },
+                        OR: [
+                            { email: { contains: search, mode: 'insensitive' } },
+                            { fullname: { contains: search, mode: 'insensitive' } },
+                        ]
+                    },
+                    select: {
+                        id: true,
+                        role: true,
+                        email: true,
+                        avatar: true,
+                        status: true,
+                        fullname: true,
+                        createdAt: true,
+                    },
+                    take: limit,
+                    skip: offset,
+                    orderBy: { updatedAt: 'desc' }
+                }),
+                this.prisma.modmin.count({
+                    where: {
+                        role: role ? role : { in: ['ADMIN', 'MODERATOR'] },
+                        OR: [
+                            { email: { contains: search, mode: 'insensitive' } },
+                            { fullname: { contains: search, mode: 'insensitive' } },
+                        ]
+                    }
+                })
+            ])
+
+            const totalPage = Math.ceil(total / limit)
+            const hasNext = page < totalPage
+            const hasPrev = page > 1
+
+            this.response.sendSuccess(res, StatusCodes.OK, {
+                data: modmins,
+                metadata: {
+                    page,
+                    limit,
+                    total,
+                    totalPage,
+                    hasNext,
+                    hasPrev,
+                }
+            })
+        } catch (err) {
+            this.misc.handleServerError(res, err)
+        }
     }
 }

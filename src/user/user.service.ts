@@ -4,6 +4,8 @@ import { StatusCodes } from 'enums/statusCodes'
 import { MiscService } from 'libs/misc.service'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
+import { normalizePhoneNumber } from 'helpers/generators'
+import { FetchUsersDTO } from 'src/app/dto/pagination.dto'
 import { FetchRatingAndReviewsDTO, RatingDTO } from './dto/rate.dto'
 
 @Injectable()
@@ -205,6 +207,127 @@ export class UserService {
             this.response.sendSuccess(res, StatusCodes.OK, {
                 data: rating,
                 message: "Rating deleted successfully"
+            })
+        } catch (err) {
+            this.misc.handleServerError(res, err)
+        }
+    }
+
+    async fetchUsers(
+        res: Response,
+        {
+            role,
+            sortBy,
+            page = 1,
+            limit = 50,
+            search = '',
+        }: FetchUsersDTO,
+        { role: authRole }: ExpressUser,
+    ) {
+        try {
+            page = Number(page)
+            limit = Number(limit)
+
+            if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+                return this.response.sendError(res, StatusCodes.BadRequest, "Invalid pagination query")
+            }
+
+            const offset = (page - 1) * limit
+
+            let isAllowed: boolean
+
+            if (authRole === "ADMIN" || authRole === "MODERATOR") {
+                isAllowed = true
+            } else if (authRole === "DRIVER" && role === "DRIVER") {
+                isAllowed = false
+            } else if (authRole === "PASSENGER") {
+                isAllowed = true
+            } else {
+                isAllowed = false
+            }
+
+            if (!isAllowed) {
+                return this.response.sendError(res, StatusCodes.Forbidden, "Forbidden Resource")
+            }
+
+            let [users, total] = await this.prisma.$transaction([
+                this.prisma.user.findMany({
+                    where: {
+                        role: role ? role : { in: ['PASSENGER', 'DRIVER'] },
+                        OR: [
+                            { firstname: { contains: search, mode: 'insensitive' } },
+                            { lastname: { contains: search, mode: 'insensitive' } },
+                            { email: { contains: search, mode: 'insensitive' } },
+                            { phone: { equals: normalizePhoneNumber(search) } },
+                        ]
+                    },
+                    take: limit,
+                    skip: offset,
+                    select: {
+                        id: true,
+                        email: true,
+                        phone: true,
+                        lastname: true,
+                        firstname: true,
+                        createdAt: true,
+                        middlename: true,
+                        profile: {
+                            select: {
+                                avatar: true,
+                                gender: true,
+                                address: true,
+                                email_verified: true,
+                            }
+                        },
+                        role: true,
+                        status: true,
+                    },
+                    orderBy: sortBy === "NAME" ? { firstname: 'desc' } : { createdAt: 'desc' },
+                }),
+                this.prisma.user.count({
+                    where: {
+                        role: role ? role : { in: ['PASSENGER', 'DRIVER'] },
+                        OR: [
+                            { firstname: { contains: search, mode: 'insensitive' } },
+                            { lastname: { contains: search, mode: 'insensitive' } },
+                            { email: { contains: search, mode: 'insensitive' } },
+                            { phone: { equals: normalizePhoneNumber(search) } },
+                        ]
+                    }
+                })
+            ])
+
+            const totalPage = Math.ceil(total / limit)
+            const hasNext = page < totalPage
+            const hasPrev = page > 1
+
+            if (role === "DRIVER" || sortBy === "RATING") {
+                users = await Promise.all(users.map(async (user) => {
+                    const totalVehicles = await this.prisma.vehicle.count({
+                        where: { driverId: user.id }
+                    })
+
+                    const rating = await this.prisma.getTotalRating(user.id)
+
+                    return { ...user, totalVehicles, rating }
+                }))
+
+                if (sortBy === "RATING") {
+                    // @ts-ignore
+                    users.sort((a, b) => b.rating - a.rating)
+                }
+            }
+
+            this.response.sendSuccess(res, StatusCodes.OK, {
+                data: users,
+                metadata: {
+                    page,
+                    limit,
+                    total,
+                    totalPage,
+                    hasNext,
+                    hasPrev,
+                }
             })
         } catch (err) {
             this.misc.handleServerError(res, err)

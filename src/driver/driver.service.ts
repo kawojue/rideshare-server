@@ -207,11 +207,24 @@ export class DriverService {
 
             const verification = await this.prisma.verification.findUnique({
                 where: { driverId: sub },
-                select: { approved: true }
+                select: {
+                    approved: true,
+                    driver: {
+                        select: {
+                            profile: {
+                                select: { email_verified: true }
+                            }
+                        }
+                    }
+                }
             })
 
             if (!verification) {
                 return this.response.sendError(res, StatusCodes.Forbidden, "Profile verification is required")
+            }
+
+            if (!verification.driver.profile.email_verified) {
+                return this.response.sendError(res, StatusCodes.Unauthorized, "Verify your email")
             }
 
             if (!verification?.approved) {

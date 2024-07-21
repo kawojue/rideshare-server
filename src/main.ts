@@ -1,6 +1,6 @@
 import * as express from 'express'
 import * as passport from 'passport'
-import { AppModule } from './app.module'
+import { AppModule } from './app/app.module'
 import * as session from 'express-session'
 import { NestFactory } from '@nestjs/core'
 import * as cookieParser from 'cookie-parser'

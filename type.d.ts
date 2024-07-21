@@ -20,7 +20,7 @@ interface IGenOTP {
 
 interface ExpressUser extends Express.User {
     sub: string
-    role: Role
+    role: Roles
     status?: Status
 }
 
