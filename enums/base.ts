@@ -32,3 +32,8 @@ export enum PayoutAction {
     GRANT = "GRANT",
     DECLINE = "DECLINE"
 }
+
+export enum Chart {
+    montly = "monthly",
+    weekdays = "weekdays",
+}

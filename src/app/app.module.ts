@@ -12,6 +12,7 @@ import { ModminModule } from '../modmin/modmin.module'
 import { ResponseService } from 'libs/response.service'
 import { RealtimeModule } from '../realtime/realtime.module'
 import cloudinaryConfig from '../cloudinary/cloudinary.config'
+import { AnalyticsModule } from 'src/analytics/analytics.module'
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common'
 import { RateLimiterMiddleware } from '../middlewares/rate-limit.middleware'
 
@@ -24,8 +25,9 @@ import { RateLimiterMiddleware } from '../middlewares/rate-limit.middleware'
     UserModule,
     DriverModule,
     WalletModule,
-    RealtimeModule,
     ModminModule,
+    RealtimeModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
