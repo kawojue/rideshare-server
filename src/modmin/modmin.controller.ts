@@ -14,6 +14,7 @@ import { Role } from '@prisma/client'
 import { avatars } from 'utils/avatars'
 import { Roles } from 'src/jwt/role.decorator'
 import { ModminService } from './modmin.service'
+import { WithdrawalRequestDTO } from './dto/payout.dto'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
 import { FetchModminsDTO } from 'src/app/dto/pagination.dto'
@@ -75,5 +76,16 @@ export class ModminController {
     @Param('accountId') accountId: string
   ) {
     await this.modminService.toggleAccountSuspension(res, accountId, req.user)
+  }
+
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN)
+  @Post('/withdrawal-request/:requestId')
+  async withdrawalRequest(
+    @Res() res: Response,
+    @Query() q: WithdrawalRequestDTO,
+    @Param('requestId') requestId: string
+  ) {
+    await this.modminService.withdrawalRequest(res, requestId, q)
   }
 }

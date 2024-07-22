@@ -1,6 +1,5 @@
 import {
     OTPDTO,
-    PinDTO,
     EmailDTO,
     SigninDTO,
     SignupDTO,
@@ -235,7 +234,7 @@ export class AuthService {
             return this.response.sendError(res, StatusCodes.NotFound, "Account not found")
         }
 
-        const checkings = await this.prisma.biometricCheck(decoded, 'Login')
+        const checkings = await this.prisma.biometricCheck(decoded)
 
         if (!checkings.isAbleToUseBiometric) {
             return this.response.sendError(res, StatusCodes.Unauthorized, checkings.reason)
@@ -557,60 +556,6 @@ export class AuthService {
             })
         } catch (err) {
             this.misc.handleServerError(res, err, "Reset password failed")
-        }
-    }
-
-    async createTxPin(
-        res: Response,
-        { sub }: ExpressUser,
-        { pin1, pin2, otp }: PinDTO,
-    ) {
-        try {
-            const user = await this.prisma.getProfile(sub)
-
-            if (!user.email_verified) {
-                return this.response.sendError(res, StatusCodes.Forbidden, "Verify your email before creating a transaction PIN")
-            }
-
-            if (pin1 !== pin2) {
-                return this.response.sendError(res, StatusCodes.BadRequest, "PINs do not match")
-            }
-
-            if (user.pin) {
-                const totp = await this.prisma.totp.findFirst({
-                    where: { totp: otp },
-                    include: { user: { select: { id: true } } }
-                })
-
-                if (!totp) {
-                    return this.response.sendError(res, StatusCodes.Unauthorized, 'Invalid OTP')
-                }
-
-                const otp_expiry = new Date(totp.totp_expiry)
-                const expired = new Date() > otp_expiry
-
-                if (expired) {
-                    this.response.sendError(res, StatusCodes.Forbidden, 'OTP has expired')
-                    await this.prisma.totp.delete({
-                        where: { userId: sub }
-                    })
-                    return
-                }
-            }
-
-            await this.prisma.profile.update({
-                where: { userId: sub },
-                data: {
-                    pin: await this.encryption.hash(pin1),
-                    lastPinChanged: new Date(),
-                }
-            })
-
-            this.response.sendSuccess(res, StatusCodes.OK, {
-                message: "Transaction PIN has been created successfully"
-            })
-        } catch (err) {
-            this.misc.handleServerError(res, err, "Sorry, there is a problem on our end")
         }
     }
 

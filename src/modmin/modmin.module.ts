@@ -9,6 +9,7 @@ import { PrismaService } from 'prisma/prisma.service'
 import { ModminController } from './modmin.controller'
 import { ResponseService } from 'libs/response.service'
 import { EncryptionService } from 'libs/encryption.service'
+import { PaystackService } from 'libs/Paystack/paystack.service'
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { EncryptionService } from 'libs/encryption.service'
     MiscService,
     PlunkService,
     PrismaService,
+    PaystackService,
     ResponseService,
     EncryptionService,
   ],

@@ -1,16 +1,20 @@
 import { Response } from 'express'
 import { avatars } from 'utils/avatars'
 import { Injectable } from '@nestjs/common'
-import { Modmin, User } from '@prisma/client'
 import { StatusCodes } from 'enums/statusCodes'
 import { MiscService } from 'libs/misc.service'
 import { titleText } from 'helpers/transformer'
 import { PlunkService } from 'libs/plunk.service'
 import { PrismaService } from 'prisma/prisma.service'
+import { WithdrawalRequestDTO } from './dto/payout.dto'
 import { ResponseService } from 'libs/response.service'
 import { EncryptionService } from 'libs/encryption.service'
+import { generateRandomDigits } from 'helpers/generators'
 import { FetchModminsDTO } from 'src/app/dto/pagination.dto'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
+import { PaystackService } from 'libs/Paystack/paystack.service'
+import { Modmin, TransferStatus, User, WithdrwalRequest } from '@prisma/client'
+
 
 @Injectable()
 export class ModminService {
@@ -21,6 +25,7 @@ export class ModminService {
         private readonly plunk: PlunkService,
         private readonly prisma: PrismaService,
         private readonly response: ResponseService,
+        private readonly paystack: PaystackService,
         private readonly encryption: EncryptionService,
     ) {
         this.isProd = process.env.NODE_ENV === "production"
@@ -240,6 +245,114 @@ export class ModminService {
             })
         } catch (err) {
             this.misc.handleServerError(res, err)
+        }
+    }
+
+    async withdrawalRequest(
+        res: Response,
+        requestId: string,
+        { action }: WithdrawalRequestDTO,
+    ) {
+        try {
+            let request = await this.prisma.withdrwalRequest.findUnique({
+                where: { id: requestId },
+                include: { linkedBank: true }
+            })
+
+            if (!request) {
+                return this.response.sendError(res, StatusCodes.NotFound, "Withdrawal request not found")
+            }
+
+            if (request.locked) {
+                return this.response.sendError(res, StatusCodes.Conflict, "Request is already being processed")
+            }
+
+            await this.prisma.withdrwalRequest.update({
+                where: { id: requestId },
+                data: { locked: true }
+            })
+
+            let updatedRequest: WithdrwalRequest
+
+            if (action === "GRANT") {
+                const amount = request.amount
+                const fee = await this.misc.calculateFees(amount)
+                const settlementAmount = amount - fee.totalFee
+                const amountInKobo = settlementAmount * 100
+
+                const { data: details } = await this.paystack.resolveAccount(request.linkedBank.accountNumber, request.linkedBank.bankCode)
+
+                const { data: recepient } = await this.paystack.createRecipient({
+                    account_number: details.account_number,
+                    bank_code: request.linkedBank.bankCode,
+                    currency: 'NGN',
+                    name: details.account_name,
+                    type: 'nuban',
+                })
+
+                const { data: transfer } = await this.paystack.initiateTransfer({
+                    source: 'balance',
+                    amount: amountInKobo,
+                    reason: `RideShare - withdrawal`,
+                    recipient: recepient.recipient_code,
+                    reference: `withdrawal-${generateRandomDigits(7)}${Date.now()}`,
+                })
+
+                const [withdrawal] = await this.prisma.$transaction([
+                    this.prisma.withdrwalRequest.update({
+                        where: { id: requestId },
+                        data: { status: 'GRANTED' }
+                    }),
+                    this.prisma.txHistory.create({
+                        data: {
+                            amount: amount,
+                            type: 'WITHDRAWAL',
+                            totalFee: fee.totalFee,
+                            paystackFee: fee.paystackFee,
+                            reference: transfer.reference,
+                            processingFee: fee.processingFee,
+                            transfer_code: transfer.transfer_code,
+                            recipient_code: String(transfer.recipient),
+                            createdAt: new Date(transfer.createdAt),
+                            destinationBankCode: recepient.details.bank_code,
+                            destinationBankName: recepient.details.bank_name,
+                            destinationAccountName: recepient.details.account_name,
+                            status: transfer.status.toUpperCase() as TransferStatus,
+                            destinationAccountNumber: recepient.details.account_number,
+                            user: { connect: { id: request.linkedBank.userId } },
+                        },
+                    }),
+                ])
+
+                updatedRequest = withdrawal
+            }
+
+            if (action === "DECLINE") {
+                const [withdrawal] = await this.prisma.$transaction([
+                    this.prisma.withdrwalRequest.update({
+                        where: { id: requestId },
+                        data: { status: 'GRANTED' }
+                    }),
+                    this.prisma.wallet.update({
+                        where: { userId: request.linkedBank.userId },
+                        data: {
+                            lastApprovedAt: new Date(),
+                            lastApprovedAmount: request.amount,
+                            balance: { increment: request.amount },
+                        }
+                    })
+                ])
+
+                updatedRequest = withdrawal
+            }
+
+            res.on('finish', async () => {
+                // TODO: send email for starus change
+            })
+
+            this.response.sendSuccess(res, StatusCodes.OK, { data: updatedRequest })
+        } catch (err) {
+            this.misc.handlePaystackAndServerError(res, err)
         }
     }
 }

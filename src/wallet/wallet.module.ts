@@ -6,7 +6,6 @@ import { PassportModule } from '@nestjs/passport'
 import { PrismaService } from 'prisma/prisma.service'
 import { WalletController } from './wallet.controller'
 import { ResponseService } from 'libs/response.service'
-import { EncryptionService } from 'libs/encryption.service'
 import { PaystackService } from 'libs/Paystack/paystack.service'
 
 @Module({
@@ -19,7 +18,6 @@ import { PaystackService } from 'libs/Paystack/paystack.service'
     PrismaService,
     ResponseService,
     PaystackService,
-    EncryptionService,
   ],
 })
 export class WalletModule { }

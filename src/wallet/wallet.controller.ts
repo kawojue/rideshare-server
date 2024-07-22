@@ -18,10 +18,10 @@ import { StatusCodes } from 'enums/statusCodes'
 import { MiscService } from 'libs/misc.service'
 import { WalletService } from './wallet.service'
 import { getIPAddress } from 'helpers/getIPAddress'
+import { AmountDTO, FundWalletDTO } from './dto/tx.dto'
 import { ResponseService } from 'libs/response.service'
 import { BankDetailsDTO, ValidateBankDTO } from './dto/bank.dto'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
-import { AmountDTO, FundWalletDTO, InitiateWithdrawalDTO } from './dto/tx.dto'
 
 @ApiTags("Wallet")
 @Controller('wallet')
@@ -95,14 +95,14 @@ export class WalletController {
   }
 
   @ApiBearerAuth()
-  @Post('/withdraw/:linkedBankId')
+  @Post('/request-withdrawal/:linkedBankId')
   async initiateWithdrawal(
-    @Req() req: Request,
+    @Req() req: IRequest,
     @Res() res: Response,
-    @Body() body: InitiateWithdrawalDTO,
+    @Body() body: AmountDTO,
     @Param('linkedBankId') linkedBankId: string,
   ) {
-    await this.walletService.initiateWithdrawal(req, res, linkedBankId, body)
+    await this.walletService.requestWithrawal(res, linkedBankId, req.user, body)
   }
 
   @Post('/paystack/webhook')

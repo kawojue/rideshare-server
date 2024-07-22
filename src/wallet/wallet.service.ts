@@ -1,18 +1,14 @@
 import { Mutex } from 'async-mutex'
-import { JwtService } from '@nestjs/jwt'
+import { Injectable } from '@nestjs/common'
 import { Request, Response } from 'express'
 import { TransferStatus } from '@prisma/client'
 import { MiscService } from 'libs/misc.service'
 import { StatusCodes } from 'enums/statusCodes'
-import { getIPAddress } from 'helpers/getIPAddress'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
-import { generateRandomDigits } from 'helpers/generators'
-import { EncryptionService } from 'libs/encryption.service'
+import { AmountDTO, FundWalletDTO } from './dto/tx.dto'
 import { BankDetailsDTO, ValidateBankDTO } from './dto/bank.dto'
 import { PaystackService } from 'libs/Paystack/paystack.service'
-import { Injectable, UnauthorizedException } from '@nestjs/common'
-import { FundWalletDTO, InitiateWithdrawalDTO } from './dto/tx.dto'
 import { removeNullFields, toUpperCase } from 'helpers/transformer'
 
 @Injectable()
@@ -20,10 +16,8 @@ export class WalletService {
     constructor(
         private readonly misc: MiscService,
         private readonly prisma: PrismaService,
-        private readonly jwtService: JwtService,
         private readonly response: ResponseService,
         private readonly paystack: PaystackService,
-        private readonly encryption: EncryptionService,
     ) { }
 
     private processing = false
@@ -197,14 +191,12 @@ export class WalletService {
         this.response.sendSuccess(res, StatusCodes.OK, { data: bank })
     }
 
-    async initiateWithdrawal(
-        req: Request,
+    async requestWithrawal(
         res: Response,
         linkedBankId: string,
-        { biometricToken, amount, pin }: InitiateWithdrawalDTO
+        { sub: userId }: ExpressUser,
+        { amount }: AmountDTO
     ) {
-        // @ts-ignore
-        const userId = req.user?.sub
         let userMutex = this.userMutexes.get(userId)
 
         if (!userMutex) {
@@ -213,160 +205,71 @@ export class WalletService {
         }
 
         const release = await userMutex.acquire()
-        try {
-            const [profile, wallet] = await Promise.all([
-                this.prisma.getProfile(userId),
-                this.prisma.getUserWallet(userId),
-            ])
 
-            if (wallet.locked) {
-                return this.response.sendError(res, StatusCodes.Locked, "Wallet Locked")
+        try {
+            if (amount < 100) {
+                return this.response.sendError(res, StatusCodes.BadRequest, "Minimum withdrawal amount is ₦100.00")
             }
 
-            if (!profile.pin) {
-                return this.response.sendError(res, StatusCodes.BadRequest, "Create a transaction PIN")
+            const wallet = await this.prisma.getUserWallet(userId)
+
+            if (wallet.locked) {
+                return this.response.sendError(res, StatusCodes.Forbidden, "Try again later..")
+            }
+
+            if (wallet.balance < amount) {
+                return this.response.sendError(res, StatusCodes.UnprocessableEntity, "Insufficient balance")
+            }
+
+            let eligible: boolean = false
+
+            if (!wallet.lastApprovedAt) {
+                eligible = true
+            } else {
+                const twoWeeksInMilliseconds = 14 * 24 * 60 * 60 * 1000 // 2-weeks
+                const now = new Date().getTime()
+                const lastApprovedAt = new Date(wallet.lastApprovedAt).getTime()
+
+                if (now - lastApprovedAt >= twoWeeksInMilliseconds) {
+                    eligible = true
+                }
+            }
+
+            if (!eligible) {
+                return this.response.sendError(res, StatusCodes.BadRequest, "You're not yet eligible for a withdrawal request")
             }
 
             const linkedBank = await this.prisma.linkedBank.findUnique({
-                where: { id: linkedBankId, userId },
+                where: { id: linkedBankId }
             })
 
             if (!linkedBank) {
                 return this.response.sendError(res, StatusCodes.NotFound, "Linked bank not found")
             }
 
-            if (!biometricToken && !pin) {
-                return this.response.sendError(res, StatusCodes.BadRequest, 'PIN or Biometric is required')
-            }
-
-            amount = Number(amount)
-            const MIN_AMOUNT = 50
-            if (amount < MIN_AMOUNT) {
-                return this.response.sendError(res, StatusCodes.BadRequest, `Minimum amount is ₦50.00`)
-            }
-
-            if (pin) {
-                const pinTrialsKey = `pinTrials:${userId}`
-                const pinTrials = await this.prisma.cache.findUnique({
-                    where: { key: pinTrialsKey },
-                })
-
-                let maxPinTrials = 5
-                let resetInterval = 1_800_000
-                const currentTime = Date.now()
-
-                if (pinTrials && pinTrials.value >= maxPinTrials && currentTime - pinTrials.createdAt.getTime() < resetInterval) {
-                    this.response.sendError(res, StatusCodes.Unauthorized, "Maximum PIN trials exceeded")
-
-                    maxPinTrials = 3
-                    resetInterval += 3_600_000
-                    await this.prisma.cache.update({
-                        where: { key: pinTrialsKey },
-                        data: { createdAt: new Date(currentTime) },
-                    })
-
-                    return
-                }
-
-                const isMatch = await this.encryption.compare(pin, profile.pin)
-                if (!isMatch) {
-                    const cache = await this.prisma.cache.upsert({
-                        where: { key: pinTrialsKey },
-                        create: {
-                            value: 1,
-                            type: 'PIN',
-                            key: pinTrialsKey,
-                            createdAt: new Date(currentTime),
-                        },
-                        update: { value: { increment: 1 }, createdAt: new Date(currentTime) },
-                    })
-
-                    return this.response.sendError(res, StatusCodes.Unauthorized, `Invalid PIN. ${maxPinTrials - cache.value} trial(s) left`)
-                }
-
-                if (pinTrials) {
-                    await this.prisma.cache.delete({ where: { key: pinTrialsKey } })
-                }
-            }
-
-            if (biometricToken) {
-                let decoded: JwtDecoded
-
-                try {
-                    decoded = await this.jwtService.verifyAsync(biometricToken, {
-                        secret: process.env.JWT_SECRET!,
-                        ignoreExpiration: true,
-                    })
-                } catch (err) {
-                    throw new UnauthorizedException("Invalid token")
-                }
-
-                if (!decoded?.sub) {
-                    return this.response.sendError(res, StatusCodes.Forbidden, "Invalid token")
-                }
-
-                const checkings = await this.prisma.biometricCheck(decoded, 'Tx')
-                if (!checkings.isAbleToUseBiometric) {
-                    return this.response.sendError(res, StatusCodes.Unauthorized, checkings.reason)
-                }
-            }
-
-            const fee = await this.misc.calculateFees(amount)
-            const settlementAmount = amount - fee.totalFee
-            const amountInKobo = settlementAmount * 100
-
-            if (amount > wallet.balance) {
-                return this.response.sendError(res, StatusCodes.UnprocessableEntity, "Insufficient Balance")
-            }
-
-            const { data: details } = await this.paystack.resolveAccount(linkedBank.accountNumber, linkedBank.bankCode)
-
-            const { data: recepient } = await this.paystack.createRecipient({
-                account_number: details.account_number,
-                bank_code: linkedBank.bankCode,
-                currency: 'NGN',
-                name: details.account_name,
-                type: 'nuban',
-            })
-
-            const { data: transfer } = await this.paystack.initiateTransfer({
-                recipient: recepient.recipient_code,
-                source: 'balance',
-                reason: `RideShare - withdrawal`,
-                amount: amountInKobo,
-                reference: `withdrawal-${generateRandomDigits(7)}${Date.now()}`,
-            })
-
-            const [_, tx] = await Promise.all([
-                this.updateUserBalance(userId, amount, 'decrement'),
-                this.prisma.txHistory.create({
+            const withdrawalRequest = await this.prisma.$transaction([
+                this.prisma.withdrwalRequest.create({
                     data: {
                         amount: amount,
-                        type: 'WITHDRAWAL',
-                        ip: getIPAddress(req),
-                        totalFee: fee.totalFee,
-                        paystackFee: fee.paystackFee,
-                        reference: transfer.reference,
-                        processingFee: fee.processingFee,
-                        transfer_code: transfer.transfer_code,
-                        recipient_code: String(transfer.recipient),
-                        createdAt: new Date(transfer.createdAt),
-                        destinationBankCode: recepient.details.bank_code,
-                        destinationBankName: recepient.details.bank_name,
-                        destinationAccountName: recepient.details.account_name,
-                        status: transfer.status.toUpperCase() as TransferStatus,
-                        destinationAccountNumber: recepient.details.account_number,
-                        user: { connect: { id: userId } },
-                    },
+                        status: 'PENDING',
+                        linkedBank: { connect: { id: linkedBankId } }
+                    }
                 }),
+                this.prisma.wallet.update({
+                    where: { id: wallet.id },
+                    data: {
+                        lastRequestedAt: new Date(),
+                        balance: { decrement: amount },
+                    }
+                })
             ])
 
-            this.response.sendSuccess(res, StatusCodes.Created, {
-                data: removeNullFields(tx),
-                message: "New Transaction has been initiated",
+            this.response.sendSuccess(res, StatusCodes.OK, {
+                data: withdrawalRequest,
+                message: "Withdrawal request has been sent to the Admin in charge",
             })
         } catch (err) {
-            this.misc.handlePaystackAndServerError(res, err)
+            this.misc.handleServerError(res, err)
         } finally {
             release()
         }
@@ -408,7 +311,7 @@ export class WalletService {
                     where: { userId: sub },
                     data: {
                         lastDepositedAt: new Date(),
-                        lastAmountDeposited: amount,
+                        lastDepositedAmount: amount,
                         balance: { increment: amount },
                     },
                 }),

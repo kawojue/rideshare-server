@@ -1,6 +1,5 @@
 import {
   OTPDTO,
-  PinDTO,
   EmailDTO,
   SigninDTO,
   SignupDTO,
@@ -131,18 +130,6 @@ export class AuthController {
   @Patch('/password/reset')
   async resetPassword(@Res() res: Response, @Body() body: ResetPasswordDTO) {
     await this.authService.resetPassword(res, body)
-  }
-
-  @ApiBearerAuth()
-  @Post('/pin/create')
-  @UseGuards(JwtRoleAuthGuard)
-  @Roles(Role.DRIVER, Role.PASSENGER)
-  async createTxPin(
-    @Req() req: IRequest,
-    @Res() res: Response,
-    @Body() body: PinDTO,
-  ) {
-    await this.authService.createTxPin(res, req.user, body)
   }
 
   @ApiBearerAuth()

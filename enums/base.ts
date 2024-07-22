@@ -21,3 +21,8 @@ export enum Sort {
     NAME = "NAME",
     RATING = "RATING"
 }
+
+export enum PayoutAction {
+    GRANT = "GRANT",
+    DECLINE = "DECLINE"
+}

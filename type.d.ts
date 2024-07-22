@@ -1,6 +1,5 @@
 type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'MODERATOR'
 type Status = 'ACTIVE' | 'SUSPENDED'
-type Biometric = 'Tx' | 'Login'
 
 interface CloudinaryModuleOptions {
     cloudName: string

@@ -160,42 +160,6 @@ export class UpdatePasswordDTO {
     password2: string
 }
 
-export class PinDTO {
-    @ApiProperty({
-        example: '1234'
-    })
-    @IsString()
-    @MinLength(4, {
-        message: 'Transaction PIN must be at least 4 digits'
-    })
-    @MaxLength(4, {
-        message: 'Transaction PIN must be at most 4 digits'
-    })
-    pin1: string
-
-    @ApiProperty({
-        example: '1234',
-    })
-    @MinLength(4, {
-        message: 'Transaction PIN must be at least 4 digits'
-    })
-    @MaxLength(4, {
-        message: 'Transaction PIN must be at most 4 digits'
-    })
-    @IsString()
-    pin2: string
-
-    @ApiProperty({
-        example: '234517'
-    })
-    @IsString()
-    @Matches(/^\d{6}$/, {
-        message: 'OTP must be a 6-digit number'
-    })
-    @IsOptional()
-    otp: string
-}
-
 export class EmergencyContactDTO {
     @ApiProperty({
         example: 'Raheem Kawojue'

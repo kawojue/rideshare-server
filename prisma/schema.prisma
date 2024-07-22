@@ -150,14 +150,15 @@ model Totp {
 }
 
 model LinkedBank {
-  id            String   @id @default(uuid()) @db.Uuid
-  bankName      String
-  accountName   String
-  accountNumber String
-  bankCode      String
-  primary       Boolean  @default(false)
-  updatedAt     DateTime @updatedAt
-  createdAt     DateTime @default(now())
+  id                String             @id @default(uuid()) @db.Uuid
+  bankName          String
+  accountName       String
+  accountNumber     String
+  bankCode          String
+  primary           Boolean            @default(false)
+  updatedAt         DateTime           @updatedAt
+  createdAt         DateTime           @default(now())
+  withdrawalRequest WithdrwalRequest[]
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String @db.Uuid
@@ -191,17 +192,30 @@ model TxHistory {
 
 model Wallet {
   id                  String    @id @default(uuid()) @db.Uuid
-  balance             Float     @default(0.00)
   locked              Boolean   @default(false)
+  balance             Float     @default(0.00)
+  lastApprovedAmount  Float     @default(0.00)
+  lastDepositedAmount Float     @default(0.00)
   lastDepositedAt     DateTime?
-  lastWithdrawnAt     DateTime?
-  lastAmountDeposited Float     @default(0.00)
-  lastAmountWithDrawn Float     @default(0.00)
+  lastApprovedAt      DateTime?
+  lastRequestedAt     DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String @unique @db.Uuid
+}
+
+model WithdrwalRequest {
+  id        String       @id @default(uuid()) @db.Uuid
+  amount    Float
+  locked    Boolean      @default(false)
+  status    PayoutStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  linkedBank   LinkedBank @relation(fields: [linkedBankId], references: [id], onDelete: NoAction)
+  linkedBankId String     @db.Uuid
 }
 
 model Modmin {
@@ -319,6 +333,12 @@ enum TxType {
 
 enum CacheType {
   PIN
+}
+
+enum PayoutStatus {
+  GRANTED
+  PENDING
+  DECLINED
 }
 
 enum TransferStatus {

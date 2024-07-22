@@ -16,7 +16,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         await this.$disconnect()
     }
 
-    async biometricCheck(decoded: any, type: Biometric) {
+    async biometricCheck(decoded: any) {
         const userId = decoded.sub
 
         const user = await this.user.findUnique({
@@ -55,28 +55,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             return { isAbleToUseBiometric: true }
         }
 
-        if (type === 'Login') {
-            if (lastPasswordChanged > lastUsedBiometricAt && lastUsedCredentialAt <= lastUsedBiometricAt) {
-                return {
-                    isAbleToUseBiometric: false,
-                    reason: 'Password required due to recent password change.'
-                }
-            }
-
-            if (lastUsedCredentialAt > lastUsedBiometricAt) {
-                return { isAbleToUseBiometric: true }
+        if (lastPasswordChanged > lastUsedBiometricAt && lastUsedCredentialAt <= lastUsedBiometricAt) {
+            return {
+                isAbleToUseBiometric: false,
+                reason: 'Password required due to recent password change.'
             }
         }
 
-        else if (type === 'Tx') {
-            const { lastPinChanged } = profile
-
-            if (lastPinChanged > lastUsedBiometricAt) {
-                return {
-                    isAbleToUseBiometric: false,
-                    reason: 'PIN required due to recent PIN change.'
-                }
-            }
+        if (lastUsedCredentialAt > lastUsedBiometricAt) {
+            return { isAbleToUseBiometric: true }
         }
 
         return { isAbleToUseBiometric: true }
@@ -121,7 +108,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         ])
 
         return {
-            hasCreatedTransactionPin: profile.pin !== null,
             hasAddedEmergencyContact: emergencyContact !== null,
             ...(user.role === "DRIVER" && {
                 hasAttemtedVerification: verification !== null,
