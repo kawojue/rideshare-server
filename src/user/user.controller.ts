@@ -16,8 +16,8 @@ import { UserService } from './user.service'
 import { Roles } from 'src/jwt/role.decorator'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
-import { FetchUsersDTO } from 'src/app/dto/pagination.dto'
 import { FetchRatingAndReviewsDTO, RatingDTO } from './dto/rate.dto'
+import { FetchTxHistoryDTO, FetchUsersDTO } from 'src/app/dto/pagination.dto'
 
 @ApiTags("User")
 @Controller('users')
@@ -63,5 +63,27 @@ export class UserController {
   @Delete('/rating/remove/:ratingId')
   async deleteRating(@Res() res: Response, @Param('ratingId') ratingId: string) {
     await this.userService.deleteRating(res, ratingId)
+  }
+
+  @ApiBearerAuth()
+  @Get('/tx-histories')
+  @UseGuards(JwtRoleAuthGuard)
+  async fetchWithdrawalRequest(
+    @Res() res: Response,
+    @Req() req: IRequest,
+    @Query() q: FetchTxHistoryDTO
+  ) {
+    await this.userService.fetchTxHistories(res, req.user, q)
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtRoleAuthGuard)
+  @Get('/tx-histories/:historyId')
+  async fetchTxHistory(
+    @Res() res: Response,
+    @Req() req: IRequest,
+    @Param('historyId') historyId: string
+  ) {
+    await this.userService.fetchTxHistory(res, historyId, req.user)
   }
 }

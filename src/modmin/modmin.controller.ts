@@ -11,6 +11,10 @@ import {
   Controller,
 } from '@nestjs/common'
 import { Response } from 'express'
+import {
+  FetchModminsDTO,
+  FetchWithdrawalRequestsDTO
+} from 'src/app/dto/pagination.dto'
 import { Role } from '@prisma/client'
 import { avatars } from 'utils/avatars'
 import { Roles } from 'src/jwt/role.decorator'
@@ -19,7 +23,6 @@ import { WithdrawalRequestDTO } from './dto/payout.dto'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
-import { FetchModminsDTO, FetchWithdrawalRequestsDTO } from 'src/app/dto/pagination.dto'
 
 @ApiTags("Moderator & Admin")
 @Controller('modmins')

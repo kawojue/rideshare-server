@@ -1,7 +1,7 @@
 import { ApiProperty } from "@nestjs/swagger"
 import { Transform } from "class-transformer"
-import { PayoutStatus } from "@prisma/client"
 import { IsEnum, IsOptional } from "class-validator"
+import { PayoutStatus, TransferStatus } from "@prisma/client"
 import { SortUsers, UserEnum, SortWithdrawalRequests } from "enums/base"
 
 class PaginationBaseDTO {
@@ -86,25 +86,18 @@ export class FetchModminsDTO extends InfiniteScrollDTO {
     role?: UserEnum
 }
 
-export class FetchWithdrawalRequestsDTO extends InfiniteScrollDTO {
-    @ApiProperty({
-        enum: PayoutStatus
-    })
-    @IsOptional()
-    @IsEnum(PayoutStatus)
-    status?: PayoutStatus
-
+export class AmountBaseDTO extends InfiniteScrollDTO {
     @ApiProperty({
         example: 2000
     })
     @IsOptional()
-    min: number
+    min?: number
 
     @ApiProperty({
         example: 50000
     })
     @IsOptional()
-    max: number
+    max?: number
 
     @ApiProperty({
         enum: SortWithdrawalRequests
@@ -112,4 +105,22 @@ export class FetchWithdrawalRequestsDTO extends InfiniteScrollDTO {
     @IsOptional()
     @IsEnum(SortWithdrawalRequests)
     sortBy?: SortWithdrawalRequests
+}
+
+export class FetchWithdrawalRequestsDTO extends AmountBaseDTO {
+    @ApiProperty({
+        enum: PayoutStatus
+    })
+    @IsOptional()
+    @IsEnum(PayoutStatus)
+    status?: PayoutStatus
+}
+
+export class FetchTxHistoryDTO extends AmountBaseDTO {
+    @ApiProperty({
+        enum: TransferStatus
+    })
+    @IsOptional()
+    @IsEnum(TransferStatus)
+    status?: TransferStatus
 }

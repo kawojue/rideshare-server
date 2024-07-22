@@ -5,8 +5,8 @@ import { MiscService } from 'libs/misc.service'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
 import { normalizePhoneNumber } from 'helpers/generators'
-import { FetchUsersDTO } from 'src/app/dto/pagination.dto'
 import { FetchRatingAndReviewsDTO, RatingDTO } from './dto/rate.dto'
+import { FetchTxHistoryDTO, FetchUsersDTO } from 'src/app/dto/pagination.dto'
 
 @Injectable()
 export class UserService {
@@ -332,5 +332,131 @@ export class UserService {
         } catch (err) {
             this.misc.handleServerError(res, err)
         }
+    }
+
+    async fetchTxHistories(
+        res: Response,
+        { sub, role }: ExpressUser,
+        {
+            min,
+            max,
+            sortBy,
+            status,
+            page = 1,
+            limit = 50,
+            search = '',
+            endDate = '',
+            startDate = '',
+        }: FetchTxHistoryDTO
+    ) {
+        try {
+            page = Number(page)
+            limit = Number(limit)
+
+            if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+                return this.response.sendError(res, StatusCodes.BadRequest, "Invalid pagination query")
+            }
+
+            const offset = (page - 1) * limit
+
+            const dateFilter = {
+                gte: startDate !== '' ? new Date(startDate) : new Date(0),
+                lte: endDate !== '' ? new Date(endDate) : new Date(),
+            }
+
+            const rangeFilter = {
+                gte: min ? Number(min) : null,
+                lte: max ? Number(max) : null,
+            }
+
+            const [requests, total] = await this.prisma.$transaction([
+                this.prisma.txHistory.findMany({
+                    where: {
+                        userId: (role === "ADMIN" || role === "MODERATOR") ? undefined : sub,
+                        amount: rangeFilter,
+                        createdAt: dateFilter,
+                        status: status || undefined,
+                        OR: [
+                            { user: { firstname: { contains: search, mode: 'insensitive' } } },
+                            { user: { email: { contains: search, mode: 'insensitive' } } },
+                        ]
+                    },
+                    orderBy: sortBy === "HIGHEST" ? { amount: 'desc' } : sortBy === "LOWEST" ? { amount: 'asc' } : { createdAt: 'desc' },
+                    take: limit,
+                    skip: offset,
+                    include: {
+                        user: {
+                            select: {
+                                email: true,
+                                phone: true,
+                                lastname: true,
+                                firstname: true,
+                            }
+                        }
+                    }
+                }),
+                this.prisma.txHistory.count({
+                    where: {
+                        userId: (role === "ADMIN" || role === "MODERATOR") ? undefined : sub,
+                        amount: rangeFilter,
+                        createdAt: dateFilter,
+                        status: status || undefined,
+                        OR: [
+                            { user: { firstname: { contains: search, mode: 'insensitive' } } },
+                            { user: { email: { contains: search, mode: 'insensitive' } } },
+                        ]
+                    },
+                })
+            ])
+
+            const totalPage = Math.ceil(total / limit)
+            const hasNext = page < totalPage
+            const hasPrev = page > 1
+
+            this.response.sendSuccess(res, StatusCodes.OK, {
+                data: requests,
+                metadata: {
+                    page,
+                    limit,
+                    total,
+                    totalPage,
+                    hasNext,
+                    hasPrev,
+                }
+            })
+        } catch (err) {
+            this.misc.handlePaystackAndServerError(res, err)
+        }
+    }
+
+    async fetchTxHistory(
+        res: Response,
+        historyId: string,
+        { sub, role }: ExpressUser,
+    ) {
+        const history = await this.prisma.txHistory.findUnique({
+            where: (role === "ADMIN" || role === "MODERATOR") ? {
+                id: historyId
+            } : {
+                id: historyId,
+                userId: sub,
+            },
+            include: {
+                user: {
+                    select: {
+                        email: true,
+                        phone: true,
+                        lastname: true,
+                        firstname: true,
+                    }
+                }
+            }
+        })
+
+        if (!history) {
+            return this.response.sendError(res, StatusCodes.NotFound, "Transaction History not found")
+        }
+
+        this.response.sendSuccess(res, StatusCodes.OK, { data: history })
     }
 }
