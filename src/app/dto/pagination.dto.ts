@@ -1,8 +1,8 @@
-import { Sort, UserEnum } from "enums/base"
 import { ApiProperty } from "@nestjs/swagger"
 import { Transform } from "class-transformer"
-import { IsEnum, IsOptional } from "class-validator"
 import { PayoutStatus } from "@prisma/client"
+import { IsEnum, IsOptional } from "class-validator"
+import { SortUsers, UserEnum, SortWithdrawalRequests } from "enums/base"
 
 class PaginationBaseDTO {
     @ApiProperty({
@@ -34,24 +34,38 @@ export class InfiniteScrollDTO extends PaginationBaseDTO {
     @IsOptional()
     @Transform(({ value }) => value?.trim())
     search?: string
+
+    @ApiProperty({
+        example: '2024-01-01T00:00:00.000Z',
+        default: 0,
+    })
+    @IsOptional()
+    startDate?: string
+
+    @ApiProperty({
+        example: '2024-05-02T00:00:00.000Z',
+        default: new Date(),
+    })
+    @IsOptional()
+    endDate?: string
 }
 
 export class SearchAndSortDTO extends SearchBaseDTO {
     @ApiProperty({
-        enum: Sort
+        enum: SortUsers
     })
     @IsOptional()
-    @IsEnum(Sort)
-    sortBy?: Sort
+    @IsEnum(SortUsers)
+    sortBy?: SortUsers
 }
 
 export class PaginationDTO extends InfiniteScrollDTO {
     @ApiProperty({
-        enum: Sort
+        enum: SortUsers
     })
     @IsOptional()
-    @IsEnum(Sort)
-    sortBy?: Sort
+    @IsEnum(SortUsers)
+    sortBy?: SortUsers
 }
 
 export class FetchUsersDTO extends PaginationDTO {
@@ -72,11 +86,30 @@ export class FetchModminsDTO extends InfiniteScrollDTO {
     role?: UserEnum
 }
 
-export class FetchWithdrawalRequestsDTO extends PaginationBaseDTO {
+export class FetchWithdrawalRequestsDTO extends InfiniteScrollDTO {
     @ApiProperty({
         enum: PayoutStatus
     })
     @IsOptional()
     @IsEnum(PayoutStatus)
     status?: PayoutStatus
+
+    @ApiProperty({
+        example: 2000
+    })
+    @IsOptional()
+    min: number
+
+    @ApiProperty({
+        example: 50000
+    })
+    @IsOptional()
+    max: number
+
+    @ApiProperty({
+        enum: SortWithdrawalRequests
+    })
+    @IsOptional()
+    @IsEnum(SortWithdrawalRequests)
+    sortBy?: SortWithdrawalRequests
 }

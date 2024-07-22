@@ -1,5 +1,6 @@
 import {
   Get,
+  Req,
   Res,
   Post,
   Body,
@@ -17,8 +18,8 @@ import { ModminService } from './modmin.service'
 import { WithdrawalRequestDTO } from './dto/payout.dto'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
-import { FetchModminsDTO } from 'src/app/dto/pagination.dto'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
+import { FetchModminsDTO, FetchWithdrawalRequestsDTO } from 'src/app/dto/pagination.dto'
 
 @ApiTags("Moderator & Admin")
 @Controller('modmins')
@@ -52,7 +53,7 @@ export class ModminController {
   @Patch('/avatars/:avartarId')
   async updateAvatar(
     @Res() res: Response,
-    @Res() req: IRequest,
+    @Req() req: IRequest,
     @Param('avatarId') avatarId: string
   ) {
     await this.modminService.updateAvatar(res, avatarId, req.user)
@@ -68,19 +69,30 @@ export class ModminController {
 
   @ApiBearerAuth()
   @Roles(Role.ADMIN)
-  @Patch('/toggle-suspension/:accountId')
   @UseGuards(JwtRoleAuthGuard)
+  @Patch('/toggle-suspension/:accountId')
   async toggleAccountSuspension(
     @Res() res: Response,
-    @Res() req: IRequest,
+    @Req() req: IRequest,
     @Param('accountId') accountId: string
   ) {
     await this.modminService.toggleAccountSuspension(res, accountId, req.user)
   }
 
   @ApiBearerAuth()
+  @UseGuards(JwtRoleAuthGuard)
+  @Get('/withdrawal-requests')
+  async fetchWithdrawalRequest(
+    @Res() res: Response,
+    @Req() req: IRequest,
+    @Query() q: FetchWithdrawalRequestsDTO
+  ) {
+    await this.modminService.fetchWithdrawalRequest(res, req.user, q)
+  }
+
+  @ApiBearerAuth()
   @Roles(Role.ADMIN)
-  @Post('/withdrawal-request/:requestId')
+  @Post('/withdrawal-requests/:requestId')
   async withdrawalRequest(
     @Res() res: Response,
     @Query() q: WithdrawalRequestDTO,

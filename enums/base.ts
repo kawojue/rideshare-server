@@ -16,10 +16,16 @@ export enum RatingPoint {
     FIVE = 5.0
 }
 
-export enum Sort {
+export enum SortUsers {
     DATE = "DATE",
     NAME = "NAME",
     RATING = "RATING"
+}
+
+export enum SortWithdrawalRequests {
+    DATE = "DATE",
+    LOWEST = "LOWEST",
+    HIGHEST = "HIGHEST"
 }
 
 export enum PayoutAction {

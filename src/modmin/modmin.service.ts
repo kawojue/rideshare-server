@@ -1,4 +1,14 @@
+import {
+    User,
+    Modmin,
+    TransferStatus,
+    WithdrwalRequest,
+} from '@prisma/client'
 import { Response } from 'express'
+import {
+    FetchModminsDTO,
+    FetchWithdrawalRequestsDTO,
+} from 'src/app/dto/pagination.dto'
 import { avatars } from 'utils/avatars'
 import { Injectable } from '@nestjs/common'
 import { StatusCodes } from 'enums/statusCodes'
@@ -8,12 +18,10 @@ import { PlunkService } from 'libs/plunk.service'
 import { PrismaService } from 'prisma/prisma.service'
 import { WithdrawalRequestDTO } from './dto/payout.dto'
 import { ResponseService } from 'libs/response.service'
-import { EncryptionService } from 'libs/encryption.service'
 import { generateRandomDigits } from 'helpers/generators'
-import { FetchModminsDTO } from 'src/app/dto/pagination.dto'
+import { EncryptionService } from 'libs/encryption.service'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
 import { PaystackService } from 'libs/Paystack/paystack.service'
-import { Modmin, TransferStatus, User, WithdrwalRequest } from '@prisma/client'
 
 
 @Injectable()
@@ -183,6 +191,8 @@ export class ModminService {
             page = 1,
             limit = 50,
             search = '',
+            endDate = '',
+            startDate = '',
         }: FetchModminsDTO
     ) {
         try {
@@ -195,6 +205,11 @@ export class ModminService {
 
             const offset = (page - 1) * limit
 
+            const dateFilter = {
+                gte: startDate !== '' ? new Date(startDate) : new Date(0),
+                lte: endDate !== '' ? new Date(endDate) : new Date(),
+            }
+
             const [modmins, total] = await this.prisma.$transaction([
                 this.prisma.modmin.findMany({
                     where: {
@@ -202,7 +217,8 @@ export class ModminService {
                         OR: [
                             { email: { contains: search, mode: 'insensitive' } },
                             { fullname: { contains: search, mode: 'insensitive' } },
-                        ]
+                        ],
+                        createdAt: dateFilter
                     },
                     select: {
                         id: true,
@@ -223,7 +239,8 @@ export class ModminService {
                         OR: [
                             { email: { contains: search, mode: 'insensitive' } },
                             { fullname: { contains: search, mode: 'insensitive' } },
-                        ]
+                        ],
+                        createdAt: dateFilter
                     }
                 })
             ])
@@ -356,5 +373,92 @@ export class ModminService {
         }
     }
 
-    async fetchWithdrawalRequest() { }
+    async fetchWithdrawalRequest(
+        res: Response,
+        { sub, role }: ExpressUser,
+        {
+            min,
+            max,
+            sortBy,
+            status,
+            page = 1,
+            limit = 50,
+            search = '',
+            endDate = '',
+            startDate = '',
+        }: FetchWithdrawalRequestsDTO
+    ) {
+        try {
+            page = Number(page)
+            limit = Number(limit)
+
+            if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+                return this.response.sendError(res, StatusCodes.BadRequest, "Invalid pagination query")
+            }
+
+            const offset = (page - 1) * limit
+
+            const dateFilter = {
+                gte: startDate !== '' ? new Date(startDate) : new Date(0),
+                lte: endDate !== '' ? new Date(endDate) : new Date(),
+            }
+
+            const rangeFilter = {
+                gte: min ? Number(min) : null,
+                lte: max ? Number(max) : null,
+            }
+
+            const [requests, total] = await this.prisma.$transaction([
+                this.prisma.withdrwalRequest.findMany({
+                    where: {
+                        linkedBank: (role === "ADMIN" || role === "MODERATOR") ? {
+                            userId: undefined
+                        } : { userId: sub },
+                        amount: rangeFilter,
+                        createdAt: dateFilter,
+                        status: status || undefined,
+                        OR: [
+                            { linkedBank: { bankName: { contains: search, mode: 'insensitive' } } },
+                            { linkedBank: { accountName: { contains: search, mode: 'insensitive' } } },
+                        ]
+                    },
+                    orderBy: sortBy === "HIGHEST" ? { amount: 'desc' } : sortBy === "LOWEST" ? { amount: 'asc' } : { createdAt: 'desc' },
+                    take: limit,
+                    skip: offset,
+                }),
+                this.prisma.withdrwalRequest.count({
+                    where: {
+                        linkedBank: (role === "ADMIN" || role === "MODERATOR") ? {
+                            userId: undefined
+                        } : { userId: sub },
+                        amount: rangeFilter,
+                        createdAt: dateFilter,
+                        status: status || undefined,
+                        OR: [
+                            { linkedBank: { bankName: { contains: search, mode: 'insensitive' } } },
+                            { linkedBank: { accountName: { contains: search, mode: 'insensitive' } } },
+                        ]
+                    },
+                })
+            ])
+
+            const totalPage = Math.ceil(total / limit)
+            const hasNext = page < totalPage
+            const hasPrev = page > 1
+
+            this.response.sendSuccess(res, StatusCodes.OK, {
+                data: requests,
+                metadata: {
+                    page,
+                    limit,
+                    total,
+                    totalPage,
+                    hasNext,
+                    hasPrev,
+                }
+            })
+        } catch (err) {
+            this.misc.handlePaystackAndServerError(res, err)
+        }
+    }
 }
