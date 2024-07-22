@@ -355,4 +355,6 @@ export class ModminService {
             this.misc.handlePaystackAndServerError(res, err)
         }
     }
+
+    async fetchWithdrawalRequest() { }
 }

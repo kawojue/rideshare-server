@@ -17,6 +17,9 @@ CREATE TYPE "TxType" AS ENUM ('DEPOSIT', 'PAYMENT', 'WITHDRAWAL');
 CREATE TYPE "CacheType" AS ENUM ('PIN');
 
 -- CreateEnum
+CREATE TYPE "PayoutStatus" AS ENUM ('GRANTED', 'PENDING', 'DECLINED');
+
+-- CreateEnum
 CREATE TYPE "TransferStatus" AS ENUM ('FAILED', 'PENDING', 'SUCCESS', 'REVERSED', 'RECEIVED', 'COMPLETED', 'SUCCESSFUL');
 
 -- CreateEnum
@@ -199,17 +202,31 @@ CREATE TABLE "TxHistory" (
 -- CreateTable
 CREATE TABLE "Wallet" (
     "id" UUID NOT NULL,
-    "balance" DOUBLE PRECISION NOT NULL DEFAULT 0.00,
     "locked" BOOLEAN NOT NULL DEFAULT false,
+    "balance" DOUBLE PRECISION NOT NULL DEFAULT 0.00,
+    "lastApprovedAmount" DOUBLE PRECISION NOT NULL DEFAULT 0.00,
+    "lastDepositedAmount" DOUBLE PRECISION NOT NULL DEFAULT 0.00,
     "lastDepositedAt" TIMESTAMP(3),
-    "lastWithdrawnAt" TIMESTAMP(3),
-    "lastAmountDeposited" DOUBLE PRECISION NOT NULL DEFAULT 0.00,
-    "lastAmountWithDrawn" DOUBLE PRECISION NOT NULL DEFAULT 0.00,
+    "lastApprovedAt" TIMESTAMP(3),
+    "lastRequestedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "userId" UUID NOT NULL,
 
     CONSTRAINT "Wallet_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WithdrwalRequest" (
+    "id" UUID NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "locked" BOOLEAN NOT NULL DEFAULT false,
+    "status" "PayoutStatus" NOT NULL DEFAULT 'PENDING',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "linkedBankId" UUID NOT NULL,
+
+    CONSTRAINT "WithdrwalRequest_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -369,6 +386,9 @@ ALTER TABLE "TxHistory" ADD CONSTRAINT "TxHistory_userId_fkey" FOREIGN KEY ("use
 
 -- AddForeignKey
 ALTER TABLE "Wallet" ADD CONSTRAINT "Wallet_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WithdrwalRequest" ADD CONSTRAINT "WithdrwalRequest_linkedBankId_fkey" FOREIGN KEY ("linkedBankId") REFERENCES "LinkedBank"("id") ON DELETE NO ACTION ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Rating" ADD CONSTRAINT "Rating_targetUserId_fkey" FOREIGN KEY ("targetUserId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

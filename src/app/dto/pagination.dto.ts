@@ -2,6 +2,7 @@ import { Sort, UserEnum } from "enums/base"
 import { ApiProperty } from "@nestjs/swagger"
 import { Transform } from "class-transformer"
 import { IsEnum, IsOptional } from "class-validator"
+import { PayoutStatus } from "@prisma/client"
 
 class PaginationBaseDTO {
     @ApiProperty({
@@ -69,4 +70,13 @@ export class FetchModminsDTO extends InfiniteScrollDTO {
     @IsOptional()
     @IsEnum(UserEnum)
     role?: UserEnum
+}
+
+export class FetchWithdrawalRequestsDTO extends PaginationBaseDTO {
+    @ApiProperty({
+        enum: PayoutStatus
+    })
+    @IsOptional()
+    @IsEnum(PayoutStatus)
+    status?: PayoutStatus
 }
