@@ -1,7 +1,7 @@
 import { Chart } from 'enums/base'
-import { Role } from '@prisma/client'
 import { ApiProperty } from '@nestjs/swagger'
 import { IsEnum, IsOptional } from 'class-validator'
+import { Role, TransferStatus } from '@prisma/client'
 
 export class ChartDTO {
     @ApiProperty({
@@ -19,4 +19,13 @@ export class UsersAnalyticsDTO extends ChartDTO {
     @IsOptional()
     @IsEnum(Role)
     role: Role
+}
+
+export class MoneyFlowDTO {
+    @ApiProperty({
+        enum: TransferStatus
+    })
+    @IsOptional()
+    @IsEnum(TransferStatus)
+    status?: TransferStatus
 }

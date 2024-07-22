@@ -2,7 +2,7 @@ import { Response } from 'express'
 import { Injectable } from '@nestjs/common'
 import { MiscService } from 'libs/misc.service'
 import { StatusCodes } from 'enums/statusCodes'
-import { UsersAnalyticsDTO } from './dto/index.dto'
+import { MoneyFlowDTO, UsersAnalyticsDTO } from './dto/index.dto'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
 
@@ -14,7 +14,7 @@ export class AnalyticsService {
         private readonly response: ResponseService,
     ) { }
 
-    async users(
+    async usersChart(
         res: Response,
         { role, q }: UsersAnalyticsDTO,
     ) {
@@ -74,5 +74,39 @@ export class AnalyticsService {
         } catch (err) {
             this.misc.handleServerError(res, err, "Error caching chart")
         }
+    }
+
+    async moneyFlowAggregate(
+        res: Response,
+        { status }: MoneyFlowDTO,
+        { sub, role }: ExpressUser,
+    ) {
+        const SUPERIOR = role === "ADMIN" || role === "MODERATOR"
+
+        const moneyFlow = await this.prisma.txHistory.aggregate({
+            where: {
+                userId: SUPERIOR ? undefined : sub,
+                status: status || undefined
+            },
+            _sum: { amount: true },
+            _count: { _all: true },
+            _avg: { amount: true },
+            _max: { amount: true },
+            _min: { amount: true },
+        })
+
+        const totalFee = await this.prisma.txHistory.aggregate({
+            _sum: { processingFee: true },
+            _max: { processingFee: true },
+            _min: { processingFee: true },
+            _avg: { processingFee: true },
+        })
+
+        this.response.sendSuccess(res, StatusCodes.OK, {
+            data: {
+                moneyFlow,
+                totalFee: SUPERIOR ? totalFee : undefined,
+            }
+        })
     }
 }
