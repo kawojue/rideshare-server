@@ -1,11 +1,22 @@
+import {
+  Get,
+  Req,
+  Res,
+  Query,
+  UseGuards,
+  Controller,
+} from '@nestjs/common'
+import {
+  MoneyFlowDTO,
+  MoneyFlowChartDTO,
+  UsersAnalyticsDTO,
+} from './dto/index.dto'
 import { Response } from 'express'
 import { Role } from '@prisma/client'
 import { Roles } from 'src/jwt/role.decorator'
 import { AnalyticsService } from './analytics.service'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
-import { MoneyFlowDTO, UsersAnalyticsDTO } from './dto/index.dto'
-import { Controller, Get, Query, Req, Res, UseGuards } from '@nestjs/common'
 
 @ApiTags('Analytics')
 @Controller('analytics')
@@ -29,5 +40,16 @@ export class AnalyticsController {
     @Query() query: MoneyFlowDTO
   ) {
     await this.analyticsService.moneyFlowAggregate(res, query, req.user)
+  }
+
+  @ApiBearerAuth()
+  @Get('/money-flow/chart')
+  @UseGuards(JwtRoleAuthGuard)
+  async moneyFlowChart(
+    @Res() res: Response,
+    @Req() req: IRequest,
+    @Query() query: MoneyFlowChartDTO
+  ) {
+    await this.analyticsService.moneyFlowChart(res, req.user, query)
   }
 }
