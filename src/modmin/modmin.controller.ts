@@ -43,9 +43,9 @@ export class ModminController {
   }
 
   @ApiBearerAuth()
+  @Get('/avatars')
   @UseGuards(JwtRoleAuthGuard)
   @Roles(Role.ADMIN, Role.MODERATOR)
-  @Get('/avatars')
   listAvatars() {
     return { data: avatars }
   }

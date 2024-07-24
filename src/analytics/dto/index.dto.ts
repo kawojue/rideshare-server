@@ -5,25 +5,28 @@ import { Role, TransferStatus, TxType } from '@prisma/client'
 
 export class ChartDTO {
     @ApiProperty({
-        enum: Chart
+        enum: Chart,
+        required: false,
     })
     @IsOptional()
     @IsEnum(Chart)
-    q: Chart
+    q?: Chart
 }
 
 export class UsersAnalyticsDTO extends ChartDTO {
     @ApiProperty({
-        enum: Role
+        enum: Role,
+        required: false,
     })
     @IsOptional()
     @IsEnum(Role)
-    role: Role
+    role?: Role
 }
 
 export class MoneyFlowDTO {
     @ApiProperty({
-        enum: TransferStatus
+        enum: TransferStatus,
+        required: false,
     })
     @IsOptional()
     @IsEnum(TransferStatus)
@@ -32,7 +35,8 @@ export class MoneyFlowDTO {
 
 export class MoneyFlowChartDTO extends ChartDTO {
     @ApiProperty({
-        enum: TxType
+        enum: TxType,
+        required: false,
     })
     @IsOptional()
     @IsEnum(TxType)

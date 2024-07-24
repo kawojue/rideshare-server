@@ -21,21 +21,22 @@ export class RatingDTO {
         example: "ONE",
     })
     @IsNotEmpty()
+    @Transform(({ value }) => Number(RatingPoint[value]))
     @IsEnum(RatingPoint, {
         message: "point must be one of the following values: 0NE, TWO, THREE, FOUR, FIVE"
     })
-    @Transform(({ value }) => Number(RatingPoint[value]))
     point: RatingPoint
 }
 
 export class FetchRatingAndReviewsDTO extends InfiniteScrollDTO {
     @ApiProperty({
         example: "THREE",
+        required: false,
     })
     @IsOptional()
+    @Transform(({ value }) => Number(RatingPoint[value]))
     @IsEnum(RatingPoint, {
         message: "point must be one of the following values: 0NE, TWO, THREE, FOUR, FIVE"
     })
-    @Transform(({ value }) => Number(RatingPoint[value]))
-    point: RatingPoint
+    point?: RatingPoint
 }

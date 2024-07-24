@@ -340,6 +340,7 @@ export class UserService {
         {
             min,
             max,
+            type,
             sortBy,
             status,
             page = 1,
@@ -375,6 +376,7 @@ export class UserService {
                         userId: (role === "ADMIN" || role === "MODERATOR") ? undefined : sub,
                         amount: rangeFilter,
                         createdAt: dateFilter,
+                        type: type || undefined,
                         status: status || undefined,
                         OR: [
                             { user: { firstname: { contains: search, mode: 'insensitive' } } },
@@ -400,6 +402,7 @@ export class UserService {
                         userId: (role === "ADMIN" || role === "MODERATOR") ? undefined : sub,
                         amount: rangeFilter,
                         createdAt: dateFilter,
+                        type: type || undefined,
                         status: status || undefined,
                         OR: [
                             { user: { firstname: { contains: search, mode: 'insensitive' } } },

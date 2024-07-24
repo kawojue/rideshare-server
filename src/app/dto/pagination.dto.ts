@@ -1,18 +1,20 @@
 import { ApiProperty } from "@nestjs/swagger"
 import { Transform } from "class-transformer"
 import { IsEnum, IsOptional } from "class-validator"
-import { PayoutStatus, TransferStatus } from "@prisma/client"
+import { PayoutStatus, TransferStatus, TxType } from "@prisma/client"
 import { SortUsers, UserEnum, SortWithdrawalRequests } from "enums/base"
 
 class PaginationBaseDTO {
     @ApiProperty({
-        example: 1
+        example: 1,
+        required: false,
     })
     @IsOptional()
     page?: number
 
     @ApiProperty({
-        example: 72
+        example: 72,
+        required: false,
     })
     @IsOptional()
     limit?: number
@@ -20,7 +22,8 @@ class PaginationBaseDTO {
 
 class SearchBaseDTO {
     @ApiProperty({
-        example: ' '
+        example: ' ',
+        required: false,
     })
     @Transform(({ value }) => value?.trim())
     @IsOptional()
@@ -29,7 +32,8 @@ class SearchBaseDTO {
 
 export class InfiniteScrollDTO extends PaginationBaseDTO {
     @ApiProperty({
-        example: ' '
+        example: ' ',
+        required: false,
     })
     @IsOptional()
     @Transform(({ value }) => value?.trim())
@@ -38,6 +42,7 @@ export class InfiniteScrollDTO extends PaginationBaseDTO {
     @ApiProperty({
         example: '2024-01-01T00:00:00.000Z',
         default: 0,
+        required: false,
     })
     @IsOptional()
     startDate?: string
@@ -45,6 +50,7 @@ export class InfiniteScrollDTO extends PaginationBaseDTO {
     @ApiProperty({
         example: '2024-05-02T00:00:00.000Z',
         default: new Date(),
+        required: false
     })
     @IsOptional()
     endDate?: string
@@ -52,7 +58,8 @@ export class InfiniteScrollDTO extends PaginationBaseDTO {
 
 export class SearchAndSortDTO extends SearchBaseDTO {
     @ApiProperty({
-        enum: SortUsers
+        enum: SortUsers,
+        required: false,
     })
     @IsOptional()
     @IsEnum(SortUsers)
@@ -61,7 +68,8 @@ export class SearchAndSortDTO extends SearchBaseDTO {
 
 export class PaginationDTO extends InfiniteScrollDTO {
     @ApiProperty({
-        enum: SortUsers
+        enum: SortUsers,
+        required: false,
     })
     @IsOptional()
     @IsEnum(SortUsers)
@@ -70,7 +78,8 @@ export class PaginationDTO extends InfiniteScrollDTO {
 
 export class FetchUsersDTO extends PaginationDTO {
     @ApiProperty({
-        enum: UserEnum
+        enum: UserEnum,
+        required: false,
     })
     @IsOptional()
     @IsEnum(UserEnum)
@@ -79,7 +88,8 @@ export class FetchUsersDTO extends PaginationDTO {
 
 export class FetchModminsDTO extends InfiniteScrollDTO {
     @ApiProperty({
-        enum: UserEnum
+        enum: UserEnum,
+        required: false,
     })
     @IsOptional()
     @IsEnum(UserEnum)
@@ -88,19 +98,22 @@ export class FetchModminsDTO extends InfiniteScrollDTO {
 
 export class AmountBaseDTO extends InfiniteScrollDTO {
     @ApiProperty({
-        example: 2000
+        example: 2000,
+        required: false
     })
     @IsOptional()
     min?: number
 
     @ApiProperty({
-        example: 50000
+        example: 50000,
+        required: false,
     })
     @IsOptional()
     max?: number
 
     @ApiProperty({
-        enum: SortWithdrawalRequests
+        enum: SortWithdrawalRequests,
+        required: false,
     })
     @IsOptional()
     @IsEnum(SortWithdrawalRequests)
@@ -109,7 +122,8 @@ export class AmountBaseDTO extends InfiniteScrollDTO {
 
 export class FetchWithdrawalRequestsDTO extends AmountBaseDTO {
     @ApiProperty({
-        enum: PayoutStatus
+        enum: PayoutStatus,
+        required: false,
     })
     @IsOptional()
     @IsEnum(PayoutStatus)
@@ -118,9 +132,18 @@ export class FetchWithdrawalRequestsDTO extends AmountBaseDTO {
 
 export class FetchTxHistoryDTO extends AmountBaseDTO {
     @ApiProperty({
-        enum: TransferStatus
+        enum: TransferStatus,
+        required: false,
     })
     @IsOptional()
     @IsEnum(TransferStatus)
     status?: TransferStatus
+
+    @ApiProperty({
+        enum: TxType,
+        required: false,
+    })
+    @IsOptional()
+    @IsEnum(TxType)
+    type?: TxType
 }
