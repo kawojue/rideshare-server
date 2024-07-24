@@ -314,8 +314,8 @@ enum Role {
 }
 
 enum Gender {
-  Male
-  Female
+  M
+  F
 }
 
 enum Provider {

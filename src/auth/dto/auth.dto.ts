@@ -6,8 +6,8 @@ import {
 } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
-import { titleText, toLowerCase } from 'helpers/transformer'
 import { normalizePhoneNumber } from 'helpers/generators'
+import { titleText, toLowerCase } from 'helpers/transformer'
 
 export class EmailDTO {
     @ApiProperty({ example: 'kawojue08@gmail.com' })
