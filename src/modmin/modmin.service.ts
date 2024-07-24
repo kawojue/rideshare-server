@@ -210,7 +210,7 @@ export class ModminService {
                 lte: endDate !== '' ? new Date(endDate) : new Date(),
             }
 
-            const [modmins, total] = await this.prisma.$transaction([
+            const [modmins, total] = await Promise.all([
                 this.prisma.modmin.findMany({
                     where: {
                         role: role ? role : { in: ['ADMIN', 'MODERATOR'] },
@@ -315,7 +315,7 @@ export class ModminService {
                     reference: `withdrawal-${generateRandomDigits(7)}${Date.now()}`,
                 })
 
-                const [withdrawal] = await this.prisma.$transaction([
+                const [withdrawal] = await Promise.all([
                     this.prisma.withdrwalRequest.update({
                         where: { id: requestId },
                         data: { status: 'GRANTED' }
@@ -345,7 +345,7 @@ export class ModminService {
             }
 
             if (action === "DECLINE") {
-                const [withdrawal] = await this.prisma.$transaction([
+                const [withdrawal] = await Promise.all([
                     this.prisma.withdrwalRequest.update({
                         where: { id: requestId },
                         data: { status: 'GRANTED' }
@@ -408,7 +408,7 @@ export class ModminService {
                 lte: max ? Number(max) : null,
             }
 
-            const [requests, total] = await this.prisma.$transaction([
+            const [requests, total] = await Promise.all([
                 this.prisma.withdrwalRequest.findMany({
                     where: {
                         linkedBank: (role === "ADMIN" || role === "MODERATOR") ? {

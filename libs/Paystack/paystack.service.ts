@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common'
-import { Consumer } from './consumer.service'
+import { PaystackConsumer } from './consumer.service'
 
 @Injectable()
 export class PaystackService {
-    private readonly consumer: Consumer
+    private readonly consumer: PaystackConsumer
 
     constructor() {
-        this.consumer = new Consumer('https://api.paystack.co', `Bearer ${process.env.PAYSTACK_SECRET_KEY!}`)
+        this.consumer = new PaystackConsumer('https://api.paystack.co', `Bearer ${process.env.PAYSTACK_SECRET_KEY!}`)
     }
 
     verifyDetails({ account_number, bank_code }: VerifyDetailsData) {

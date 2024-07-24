@@ -103,16 +103,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
                 where: { profileId: profile.id }
             }),
             this.verification.findUnique({
-                where: { driverId: userId }
+                where: { driverId: userId },
+                select: {
+                    idType: true,
+                    idVerified: true,
+                    addressVerified: true,
+                    driverLicenseVerified: true,
+                }
             })
         ])
 
         return {
             hasAddedEmergencyContact: emergencyContact !== null,
-            ...(user.role === "DRIVER" && {
-                hasAttemtedVerification: verification !== null,
-                hasBeenApproved: !verification ? false : verification.approved,
-            })
+            ...(user.role === "DRIVER" && { ...verification })
         }
     }
 

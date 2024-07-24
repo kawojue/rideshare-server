@@ -65,14 +65,17 @@ model Profile {
 }
 
 model Verification {
-  id             String   @id @default(uuid()) @db.Uuid
-  dob            DateTime
-  nationalId     String   @unique
-  driverLicense  String   @unique
-  proofOfAddress Json
-  approved       Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                    String   @id @default(uuid()) @db.Uuid
+  dob                   String?
+  idNumber              String?  @unique
+  idType                IDType?
+  idVerified            Boolean?
+  driverLicense         String?  @unique
+  driverLicenseVerified Boolean?
+  proofOfAddress        Json?
+  addressVerified       Boolean?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
   driverId String @unique @db.Uuid
@@ -129,7 +132,7 @@ model Cache {
   id           String    @id @default(uuid()) @db.Uuid
   key          String    @unique
   value        Int?
-  expires_in   Int?
+  expires_in   String?
   scope        String?
   token_type   String?
   access_token String?
@@ -332,7 +335,7 @@ enum TxType {
 }
 
 enum CacheType {
-  PIN
+  QOREID
 }
 
 enum PayoutStatus {
@@ -358,4 +361,10 @@ enum CallStatus {
   RECEIVED
   MISSED
   ENDED
+}
+
+enum IDType {
+  NIN
+  VOTER
+  PASSPORT
 }

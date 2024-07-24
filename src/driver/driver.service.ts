@@ -1,8 +1,4 @@
 import axios from 'axios'
-import {
-    extractFirstAndLastName,
-    formatDate, toUpperCase,
-} from 'helpers/transformer'
 import { Response } from 'express'
 import { Prisma } from '@prisma/client'
 import { validateFile } from 'utils/file'
@@ -13,6 +9,7 @@ import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
 import { VerificationDTO } from './dto/verification.dto'
 import { normalizePhoneNumber } from 'helpers/generators'
+import { formatDate, toUpperCase } from 'helpers/transformer'
 import { UpdateVehicleDTO, VehicleDTO } from './dto/vehicle.dto'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
 

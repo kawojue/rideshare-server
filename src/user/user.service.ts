@@ -250,7 +250,7 @@ export class UserService {
                 return this.response.sendError(res, StatusCodes.Forbidden, "Forbidden Resource")
             }
 
-            let [users, total] = await this.prisma.$transaction([
+            let [users, total] = await Promise.all([
                 this.prisma.user.findMany({
                     where: {
                         role: role ? role : { in: ['PASSENGER', 'DRIVER'] },
@@ -370,7 +370,7 @@ export class UserService {
                 lte: max ? Number(max) : null,
             }
 
-            const [requests, total] = await this.prisma.$transaction([
+            const [requests, total] = await Promise.all([
                 this.prisma.txHistory.findMany({
                     where: {
                         userId: (role === "ADMIN" || role === "MODERATOR") ? undefined : sub,

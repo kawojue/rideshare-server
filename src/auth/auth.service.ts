@@ -303,6 +303,12 @@ export class AuthService {
             })
         ])
 
+        if (as === "DRIVER") {
+            await this.prisma.verification.create({
+                data: { driver: { connect: { id: _id } } }
+            })
+        }
+
         res.on('finish', async () => {
             if (user) {
                 const { totp, totp_expiry } = generateOTP(6)

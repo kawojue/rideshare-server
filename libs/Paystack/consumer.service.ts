@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosResponse, Method } from 'axios'
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 
 @Injectable()
-export class Consumer {
+export class PaystackConsumer {
     readonly axiosInstance: AxiosInstance
 
     constructor(baseURL: string, token: string) {
