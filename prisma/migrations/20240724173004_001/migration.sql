@@ -2,7 +2,7 @@
 CREATE TYPE "Role" AS ENUM ('ADMIN', 'DRIVER', 'PASSENGER', 'MODERATOR');
 
 -- CreateEnum
-CREATE TYPE "Gender" AS ENUM ('Male', 'Female');
+CREATE TYPE "Gender" AS ENUM ('M', 'F');
 
 -- CreateEnum
 CREATE TYPE "Provider" AS ENUM ('Local', 'Google');
@@ -14,7 +14,7 @@ CREATE TYPE "Status" AS ENUM ('ACTIVE', 'SUSPENDED');
 CREATE TYPE "TxType" AS ENUM ('DEPOSIT', 'PAYMENT', 'WITHDRAWAL');
 
 -- CreateEnum
-CREATE TYPE "CacheType" AS ENUM ('PIN');
+CREATE TYPE "CacheType" AS ENUM ('QOREID');
 
 -- CreateEnum
 CREATE TYPE "PayoutStatus" AS ENUM ('GRANTED', 'PENDING', 'DECLINED');
@@ -24,6 +24,9 @@ CREATE TYPE "TransferStatus" AS ENUM ('FAILED', 'PENDING', 'SUCCESS', 'REVERSED'
 
 -- CreateEnum
 CREATE TYPE "CallStatus" AS ENUM ('INITIATED', 'ANSWERED', 'REJECTED', 'RECEIVED', 'MISSED', 'ENDED');
+
+-- CreateEnum
+CREATE TYPE "IDType" AS ENUM ('NIN', 'VOTER', 'PASSPORT');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -69,11 +72,14 @@ CREATE TABLE "Profile" (
 -- CreateTable
 CREATE TABLE "Verification" (
     "id" UUID NOT NULL,
-    "dob" TIMESTAMP(3) NOT NULL,
-    "nationalId" TEXT NOT NULL,
-    "driverLicense" TEXT NOT NULL,
-    "proofOfAddress" JSONB NOT NULL,
-    "approved" BOOLEAN NOT NULL DEFAULT false,
+    "dob" TEXT,
+    "idNumber" TEXT,
+    "idType" "IDType",
+    "idVerified" BOOLEAN,
+    "driverLicense" TEXT,
+    "driverLicenseVerified" BOOLEAN,
+    "proofOfAddress" JSONB,
+    "addressVerified" BOOLEAN,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "driverId" UUID NOT NULL,
@@ -134,7 +140,7 @@ CREATE TABLE "Cache" (
     "id" UUID NOT NULL,
     "key" TEXT NOT NULL,
     "value" INTEGER,
-    "expires_in" INTEGER,
+    "expires_in" TEXT,
     "scope" TEXT,
     "token_type" TEXT,
     "access_token" TEXT,
@@ -316,7 +322,7 @@ CREATE INDEX "User_refresh_token_idx" ON "User"("refresh_token");
 CREATE UNIQUE INDEX "Profile_userId_key" ON "Profile"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Verification_nationalId_key" ON "Verification"("nationalId");
+CREATE UNIQUE INDEX "Verification_idNumber_key" ON "Verification"("idNumber");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Verification_driverLicense_key" ON "Verification"("driverLicense");
