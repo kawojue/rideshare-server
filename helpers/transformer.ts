@@ -1,4 +1,4 @@
-export const titleText = (text: string) => {
+export const titleText = (text: string): string => {
     return text.trim()
         .split(" ")
         .map(txt => txt[0].toUpperCase() + txt.slice(1).toLowerCase())
@@ -25,13 +25,24 @@ export const removeNullFields = (obj: any): any => {
     }
 }
 
-export const formatDate = (date: Date | string): string => {
+export const formatDate = (date: Date | string, format: 'YYYY-MM-DD' | 'DD-MM-YYYY' | 'MM-DD-YYYY'): string => {
     const d = new Date(date)
     const year = d.getFullYear()
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
+
+    switch (format) {
+        case 'YYYY-MM-DD':
+            return `${year}-${month}-${day}`
+        case 'DD-MM-YYYY':
+            return `${day}-${month}-${year}`
+        case 'MM-DD-YYYY':
+            return `${month}-${day}-${year}`
+        default:
+            throw new Error('Invalid date format')
+    }
 }
+
 
 export const formatDuration = (seconds: number | null): string => {
     if (seconds === null) return null
@@ -45,23 +56,4 @@ export const formatDuration = (seconds: number | null): string => {
     const sStr = s > 0 ? `${s}s` : ''
 
     return `${hStr} ${mStr} ${sStr}`.trim()
-}
-
-export const extractFirstAndLastName = (fullName: string): { firstName: string, lastName: string } => {
-    fullName = fullName.trim()
-
-    const nameParts = fullName.split(/\s+/)
-
-    let firstName: string
-    let lastName: string
-
-    if (nameParts.length === 1) {
-        firstName = nameParts[0]
-        lastName = ''
-    } else {
-        firstName = nameParts[0]
-        lastName = nameParts[nameParts.length - 1]
-    }
-
-    return { firstName, lastName }
 }

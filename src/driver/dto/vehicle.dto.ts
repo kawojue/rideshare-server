@@ -50,8 +50,10 @@ export class VehicleDTO {
 
     @ApiProperty({
         example: '1HGCM82633A123456',
+        required: false
     })
     @IsString()
+    @IsOptional()
     @IsNotEmpty()
     @Transform(({ value }) => toUpperCase(value))
     vin: string
@@ -61,10 +63,6 @@ export class VehicleDTO {
     })
     @IsString()
     @IsNotEmpty()
-    @Transform(({ value }) => {
-        const v = value.replace('-', '')
-        return toUpperCase(v)
-    })
     plateNumber: string
 
     @ApiProperty({

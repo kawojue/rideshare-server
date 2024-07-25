@@ -69,11 +69,11 @@ model Verification {
   dob                   String?
   idNumber              String?  @unique
   idType                IDType?
-  idVerified            Boolean?
+  idVerified            Boolean  @default(false)
   driverLicense         String?  @unique
-  driverLicenseVerified Boolean?
+  driverLicenseVerified Boolean? @default(false)
   proofOfAddress        Json?
-  addressVerified       Boolean?
+  addressVerified       Boolean? @default(false)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -100,7 +100,7 @@ model Vehicle {
   year              String?
   color             String
   seatNumber        Int
-  vin               String   @unique
+  vin               String?  @unique
   plateNumber       String   @unique
   isOwner           Boolean
   agreementDocument Json?

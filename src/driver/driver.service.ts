@@ -1,4 +1,3 @@
-import axios from 'axios'
 import { Response } from 'express'
 import { Prisma } from '@prisma/client'
 import { validateFile } from 'utils/file'
@@ -7,172 +6,80 @@ import { MiscService } from 'libs/misc.service'
 import { StatusCodes } from 'enums/statusCodes'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
-import { VerificationDTO } from './dto/verification.dto'
 import { normalizePhoneNumber } from 'helpers/generators'
+import { QoreidService } from 'libs/Qoreid/qoreid.service'
 import { formatDate, toUpperCase } from 'helpers/transformer'
 import { UpdateVehicleDTO, VehicleDTO } from './dto/vehicle.dto'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
+import { DriverLicenseDTO, IDVerificationDTO } from './dto/verification.dto'
 
 @Injectable()
 export class DriverService {
+    private qoreid: QoreidService
+
     constructor(
         private readonly misc: MiscService,
         private readonly prisma: PrismaService,
         private readonly response: ResponseService,
         private readonly cloudinary: CloudinaryService,
-    ) { }
+    ) {
+        this.qoreid = new QoreidService()
+    }
 
-    async verification(
+    async idVerification(
         res: Response,
         { sub }: ExpressUser,
-        file: Express.Multer.File,
         {
-            nationalId, vnin,
-            dob, driverLicenseId,
-        }: VerificationDTO
+            dob,
+            idType,
+            idNumber,
+        }: IDVerificationDTO,
     ) {
-        try {
-            const isDriverLicenseExist = await this.prisma.verification.findFirst({
-                where: { approved: true, driverLicense: { equals: driverLicenseId, mode: 'insensitive' } }
-            })
-
-            if (isDriverLicenseExist) {
-                return this.response.sendError(res, StatusCodes.Conflict, "Rider with the same driver's license already exist")
-            }
-
-            const isNINExist = await this.prisma.verification.findUnique({
-                where: { approved: true, nationalId: nationalId.trim() }
-            })
-
-            if (isNINExist) {
-                return this.response.sendError(res, StatusCodes.Conflict, "Rider with the same ID number already exist")
-            }
-
-            const user = await this.prisma.user.findUnique({
-                where: { id: sub },
-            })
-
-            const formattedDob = formatDate(dob)
-            const full_name: string[] = [toUpperCase(user.firstname), toUpperCase(user.lastname), toUpperCase(user.middlename)].filter(Boolean)
-
-            await axios.post(
-                "https://api.verified.africa/sfx-verify/v3/id-service",
-                {
-                    countryCode: 'NG',
-                    dob: formattedDob,
-                    searchParameter: driverLicenseId,
-                    lastName: toUpperCase(user.lastname),
-                    firstName: toUpperCase(user.firstname),
-                    verificationType: "DRIVER-LICENSE-FULL-DETAIL-VERIFICATION",
-                },
-                {
-                    headers: {
-                        userId: process.env.SEAMFIX_USERID,
-                        apiKey: process.env.SEAMFIX_API_KEY,
-                    },
-                }
-            ).then((response) => {
-                const data = response.data.response as DriverLicenseResponse
-                let matchingNamesCount = 0
-
-                const license_full_name = toUpperCase(`${data?.first_name ?? ''} ${data?.middle_name ?? ''} ${data?.last_name ?? ''}`).split(/[\s,]+/).filter(Boolean)
-
-                for (const license_name of license_full_name) {
-                    if (full_name.includes(license_name)) {
-                        matchingNamesCount += 1
-                    }
-                }
-
-                let percentage = matchingNamesCount * 25
-                if (percentage < 50) {
-                    return this.response.sendError(res, StatusCodes.Unauthorized, "Profiles not matched")
-                }
-
-                if (data?.mobile) {
-                    for (const tel of data.mobile) {
-                        const normalizedTel = normalizePhoneNumber(tel)
-                        for (const profileTel of user.phone) {
-                            const normalizedProfileTel = normalizePhoneNumber(profileTel)
-                            if (normalizedTel.endsWith(normalizedProfileTel) || normalizedProfileTel.endsWith(normalizedTel)) {
-                                percentage += 5
-                                break
+        const verification = await this.prisma.verification.findUnique({
+            where: { driverId: sub },
+            include: {
+                driver: {
+                    select: {
+                        firstname: true,
+                        lastname: true,
+                        email: true,
+                        phone: true,
+                        profile: {
+                            select: {
+                                gender: true,
                             }
                         }
                     }
-
-                    const verified = percentage >= 80
-                    if (!verified) {
-                        return this.response.sendError(res, StatusCodes.Unauthorized, "Profiles not matched")
-                    }
                 }
-            }).catch((err) => { throw err })
-
-            await axios.post(
-                "https://api.verified.africa/sfx-verify/v3/id-service",
-                {
-                    countryCode: 'NG',
-                    searchParameter: vnin,
-                    verificationType: "V-NIN",
-                },
-                {
-                    headers: {
-                        userId: process.env.SEAMFIX_USERID,
-                        apiKey: process.env.SEAMFIX_API_KEY,
-                    },
-                }
-            ).then((response) => {
-                const data = response.data.response as VNINResponse
-                let matchingNamesCount = 0
-
-                const vnin_full_name = toUpperCase(`${data?.firname ?? ''} ${data?.middlename ?? ''} ${data?.lastname ?? ''}`).split(/[\s,]+/).filter(Boolean)
-
-                for (const license_name of vnin_full_name) {
-                    if (full_name.includes(license_name)) {
-                        matchingNamesCount += 1
-                    }
-                }
-
-                let percentage = matchingNamesCount * 25
-                if (percentage < 50) {
-                    return this.response.sendError(res, StatusCodes.Unauthorized, "Profiles do not matched")
-                }
-            }).catch((err) => { throw err })
-
-
-            const fileValidation = validateFile(file, 10 << 20, 'jpg', 'jpeg', 'png')
-            if (fileValidation?.status) {
-                return this.response.sendError(res, fileValidation.status, fileValidation.message)
             }
+        })
 
-            const { public_id, secure_url } = await this.cloudinary.upload(fileValidation.file, {
-                folder: 'RideShare/Verification',
-                resource_type: 'image'
-            })
-
-            const proofOfAddress = {
-                size: file.size,
-                type: file.mimetype,
-                url: secure_url,
-                public_id: public_id,
-            }
-
-            const verification = await this.prisma.verification.upsert({
-                where: { driverId: sub },
-                create: {
-                    driverLicense: driverLicenseId,
-                    dob, proofOfAddress, nationalId,
-                    driver: { connect: { id: sub } }
-                },
-                update: {
-                    driverLicense: driverLicenseId,
-                    dob, proofOfAddress, nationalId,
-                }
-            })
-
-            this.response.sendSuccess(res, StatusCodes.OK, { data: verification })
-        } catch (err) {
-            this.misc.handleServerError(res, err)
+        if (verification.idVerified) {
+            return this.response.sendError(res, StatusCodes.Conflict, "ID has already been verified")
         }
+
+        let data: VotersCardResponse | NINResponse | PassportResponse | null
+
+        if (idType === "NIN") {
+            data = await this.qoreid.nin({ idNumber }, {
+                email: verification.driver.email,
+                phone: verification.driver.phone,
+                lastname: verification.driver.lastname,
+                firstname: verification.driver.firstname,
+                dob: formatDate(new Date(dob), 'YYYY-MM-DD'),
+                gender: verification.driver.profile.gender.toLowerCase(),
+            })
+        }
+        if (idType === "VOTER") { }
+        if (idType === "PASSPORT") { }
+    }
+
+    async driverLicenseVerification(
+        res: Response,
+        { sub }: ExpressUser,
+        { dob, licenseNumber }: DriverLicenseDTO
+    ) {
+
     }
 
     async addVehicle(
@@ -205,7 +112,6 @@ export class DriverService {
             const verification = await this.prisma.verification.findUnique({
                 where: { driverId: sub },
                 select: {
-                    approved: true,
                     driver: {
                         select: {
                             profile: {
@@ -222,10 +128,6 @@ export class DriverService {
 
             if (!verification.driver.profile.email_verified) {
                 return this.response.sendError(res, StatusCodes.Unauthorized, "Verify your email")
-            }
-
-            if (!verification?.approved) {
-                return this.response.sendError(res, StatusCodes.Unauthorized, "Verification in progress")
             }
 
             const vehicleExist = await this.prisma.vehicle.findFirst({
@@ -258,8 +160,8 @@ export class DriverService {
 
                 agreement = {
                     size: file.size,
-                    type: file.mimetype,
                     url: secure_url,
+                    type: file.mimetype,
                     public_id: public_id,
                 }
             }
@@ -356,8 +258,8 @@ export class DriverService {
 
                     agreement = {
                         size: file.size,
-                        type: file.mimetype,
                         url: secure_url,
+                        type: file.mimetype,
                         public_id: public_id,
                     }
                 }

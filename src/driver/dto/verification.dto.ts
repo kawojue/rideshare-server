@@ -1,48 +1,47 @@
 import {
+    IsEnum,
     IsString,
-    MaxLength,
-    MinLength,
     IsNotEmpty,
+    IsDateString,
 } from "class-validator"
+import { IDType } from "@prisma/client"
 import { ApiProperty } from "@nestjs/swagger"
-import { Transform } from "class-transformer"
 
-
-export class VerificationDTO {
+export class IDVerificationDTO {
     @ApiProperty({
         example: '02730846093'
     })
     @IsString()
     @IsNotEmpty()
-    @MinLength(11)
-    @MaxLength(11)
-    nationalId: string
-
-    @ApiProperty({
-        example: 'SF895332826955L0'
-    })
-    @IsString()
-    @IsNotEmpty()
-    vnin: string
-
-    @ApiProperty({
-        example: 'AAA00000AA00'
-    })
-    @IsString()
-    @IsNotEmpty()
-    driverLicenseId: string
+    idNumber: string
 
     @ApiProperty({
         example: new Date()
     })
     @IsNotEmpty()
-    @IsString()
-    @Transform(({ value }) => new Date(value))
-    dob: Date
+    @IsDateString()
+    dob: string
 
     @ApiProperty({
-        type: 'string',
-        format: 'binary'
+        enum: IDType
     })
-    proofOfAddress: Express.Multer.File
+    @IsNotEmpty()
+    @IsEnum(IDType)
+    idType: IDType
+}
+
+export class DriverLicenseDTO {
+    @ApiProperty({
+        example: '02730846093'
+    })
+    @IsString()
+    @IsNotEmpty()
+    licenseNumber: string
+
+    @ApiProperty({
+        example: new Date()
+    })
+    @IsNotEmpty()
+    @IsDateString()
+    dob: string
 }
