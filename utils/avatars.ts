@@ -9,62 +9,58 @@ export const avatars: Avatar[] = [
     },
     {
         id: 3,
-        url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Simba`,
-    },
-    {
-        id: 4,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Molly`,
     },
     {
-        id: 5,
+        id: 4,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Muffin`,
     },
     {
-        id: 6,
+        id: 5,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Salem`,
     },
     {
-        id: 7,
+        id: 6,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Tiger`,
     },
     {
-        id: 8,
+        id: 7,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Nala`,
     },
     {
-        id: 9,
+        id: 8,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Oscar`,
     },
     {
-        id: 10,
+        id: 9,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Bella`,
     },
     {
-        id: 11,
+        id: 10,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Simon`,
     },
     {
-        id: 12,
+        id: 11,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Mia`,
     },
     {
-        id: 13,
+        id: 12,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Sammy`,
     },
     {
-        id: 14,
+        id: 13,
         url: `https://api.dicebear.com/9.x/adventurer/svg?seed=Willow`,
     },
     {
-        id: 15,
+        id: 14,
         url: `https://api.dicebear.com/9.x/bottts/svg?seed=Oreo`,
     },
     {
-        id: 16,
+        id: 15,
         url: `https://api.dicebear.com/9.x/croodles/svg?seed=Nala`,
     },
     {
-        id: 17,
+        id: 16,
         url: `https://api.dicebear.com/9.x/big-ears/svg?seed=Sadie`,
     },
 ]

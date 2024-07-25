@@ -10,6 +10,11 @@ import {
   UseGuards,
   Controller,
 } from '@nestjs/common'
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+} from '@nestjs/swagger'
 import { Response } from 'express'
 import {
   FetchModminsDTO,
@@ -20,7 +25,6 @@ import { avatars } from 'utils/avatars'
 import { Roles } from 'src/jwt/role.decorator'
 import { ModminService } from './modmin.service'
 import { WithdrawalRequestDTO } from './dto/payout.dto'
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
 
@@ -102,5 +106,18 @@ export class ModminController {
     @Param('requestId') requestId: string
   ) {
     await this.modminService.withdrawalRequest(res, requestId, q)
+  }
+
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @Post('/proof-of-address/:driverId/toggle')
+  @ApiOperation({
+    summary: "This is to toggle Proof of Address verification"
+  })
+  async verifyProofOfAddress(
+    @Res() res: Response,
+    @Param('driverId') driverId: string
+  ) {
+    await this.modminService.verifyProofOfAddress(res, driverId)
   }
 }

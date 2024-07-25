@@ -461,4 +461,26 @@ export class ModminService {
             this.misc.handlePaystackAndServerError(res, err)
         }
     }
+
+    async verifyProofOfAddress(res: Response, driverId: string) {
+        try {
+            const verification = await this.prisma.verification.findUnique({
+                where: { driverId }
+            })
+
+            const newVerification = await this.prisma.verification.update({
+                where: { driverId },
+                data: { addressVerified: !verification.addressVerified },
+                select: {
+                    driverId: true,
+                    proofOfAddress: true,
+                    addressVerified: true,
+                }
+            })
+
+            this.response.sendSuccess(res, StatusCodes.OK, { data: newVerification })
+        } catch (err) {
+            this.misc.handlePaystackAndServerError(res, err)
+        }
+    }
 }
