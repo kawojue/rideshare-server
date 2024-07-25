@@ -26,6 +26,6 @@ export class QoreidService {
     }
 
     driversLicense({ idNumber }: IDParam, data: DriversLicenseBody) {
-        return this.consumer.sendRequest<DriverLicenseResponse>('POST', `/drivers-license/${idNumber}`, data)
+        return this.consumer.sendRequest<DriversLicenseResponse>('POST', `/drivers-license/${idNumber}`, data)
     }
 }

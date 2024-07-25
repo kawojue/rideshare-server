@@ -5,8 +5,9 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 
 @Injectable()
 export class QoreidConsumer {
-    private prisma: PrismaService
     private expires_in = 7199
+
+    private prisma: PrismaService
     public axiosInstance: AxiosInstance
     private readonly tokenMutex = new Mutex()
 

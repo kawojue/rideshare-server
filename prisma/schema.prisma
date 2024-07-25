@@ -65,17 +65,23 @@ model Profile {
 }
 
 model Verification {
-  id                    String   @id @default(uuid()) @db.Uuid
-  dob                   String?
-  idNumber              String?  @unique
-  idType                IDType?
-  idVerified            Boolean  @default(false)
+  id String @id @default(uuid()) @db.Uuid
+
+  idNumber           String?   @unique
+  idType             IDType?
+  idVerified         Boolean   @default(false)
+  idVerifiedAt       DateTime?
+  idVerificationData Json?
+
   driverLicense         String?  @unique
+  driverLicenseData     Json?
   driverLicenseVerified Boolean? @default(false)
-  proofOfAddress        Json?
-  addressVerified       Boolean? @default(false)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+
+  proofOfAddress  Json?
+  addressVerified Boolean? @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
   driverId String @unique @db.Uuid
@@ -106,6 +112,7 @@ model Vehicle {
   agreementDocument Json?
   ownerName         String?
   ownerPhoneNumber  String?
+  verified          Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
