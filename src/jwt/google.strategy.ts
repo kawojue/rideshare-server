@@ -1,3 +1,4 @@
+import { Request } from 'express'
 import { Profile } from 'passport'
 import { Injectable } from '@nestjs/common'
 import { PassportStrategy } from '@nestjs/passport'
@@ -16,11 +17,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     }
 
     async validate(
+        request: Request,
         accessToken: string,
         refreshToken: string,
         profile: Profile,
-        done: VerifyCallback,
-    ): Promise<any> {
+        done: VerifyCallback
+    ) {
         const { emails } = profile
         const user = {
             email: emails[0].value,
