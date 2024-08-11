@@ -9,11 +9,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         super({
             jwtFromRequest: ExtractJwt.fromExtractors([
                 (request: Request) => {
-                    return request.headers.authorization?.replace('Bearer ', '')
-                },
-                ExtractJwt.fromUrlQueryParameter('access_token'),
-                ExtractJwt.fromBodyField('access_token'),
-                ExtractJwt.fromAuthHeaderAsBearerToken()
+                    const cookieToken = request.cookies?.access_token
+                    const authHeader = request.headers.authorization
+                    const bearerToken = authHeader?.startsWith('Bearer ')
+                        ? authHeader.substring(7)
+                        : null
+
+                    return cookieToken || bearerToken
+                }
             ]),
             ignoreExpiration: false,
             secretOrKey: process.env.JWT_SECRET,

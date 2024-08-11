@@ -27,7 +27,13 @@ export class JwtRoleAuthGuard extends AuthGuard('jwt') {
             return false
         }
 
-        const access_token = request.headers.authorization?.split('Bearer ')[1]
+        const cookieToken = request.cookies?.access_token
+        const authHeader = request.headers.authorization
+        const bearerToken = authHeader?.startsWith('Bearer ')
+            ? authHeader.substring(7)
+            : null
+
+        const access_token = cookieToken || bearerToken
         if (!access_token) return false
 
         try {

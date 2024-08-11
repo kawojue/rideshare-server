@@ -31,8 +31,6 @@ import { Role } from '@prisma/client'
 import { Request, Response } from 'express'
 import { AuthService } from './auth.service'
 import { Roles } from 'src/jwt/role.decorator'
-import { StatusCodes } from 'enums/statusCodes'
-import { ResponseService } from 'libs/response.service'
 import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { GoogleAuthGuard } from 'src/jwt/google-auth.guard'
@@ -40,10 +38,13 @@ import { GoogleAuthGuard } from 'src/jwt/google-auth.guard'
 @ApiTags("Auth")
 @Controller('auth')
 export class AuthController {
+  private isProd: boolean
+
   constructor(
     private readonly authService: AuthService,
-    private readonly response: ResponseService,
-  ) { }
+  ) {
+    this.isProd = process.env.NODE_ENV === "production"
+  }
 
   @ApiOperation({
     summary: 'Use this - only for signin',
@@ -74,7 +75,13 @@ export class AuthController {
       }
     }
 
-    this.response.sendSuccess(res, StatusCodes.OK, { data })
+    res.cookie('access_token', data.access_token, {
+      sameSite: this.isProd ? 'none' : 'lax',
+      secure: this.isProd,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    })
+
+    res.redirect('http://localhost:3000')
   }
 
   @Post('/signin')
