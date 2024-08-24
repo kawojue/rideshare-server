@@ -6,10 +6,9 @@ import {
   Post,
   Query,
   Param,
+  UseGuards,
   Controller,
-  BadRequestException,
-  UnauthorizedException,
-  InternalServerErrorException,
+  HttpException,
 } from '@nestjs/common'
 import { Role } from '@prisma/client'
 import { Request, Response } from 'express'
@@ -20,11 +19,14 @@ import { WalletService } from './wallet.service'
 import { getIPAddress } from 'helpers/getIPAddress'
 import { AmountDTO, FundWalletDTO } from './dto/tx.dto'
 import { ResponseService } from 'libs/response.service'
+import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
 import { BankDetailsDTO, ValidateBankDTO } from './dto/bank.dto'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
 
+@ApiBearerAuth()
 @ApiTags("Wallet")
 @Controller('wallet')
+@UseGuards(JwtRoleAuthGuard)
 export class WalletController {
   constructor(
     private readonly misc: MiscService,
@@ -54,14 +56,14 @@ export class WalletController {
     await this.walletService.fetchBankByBankCode(res, bankCode)
   }
 
-  @ApiBearerAuth()
+
   @Get('/linked-banks')
   @Roles(Role.DRIVER, Role.PASSENGER)
   async linkedBanks(@Req() req: IRequest, @Res() res: Response) {
     await this.walletService.linkedBanks(res, req.user)
   }
 
-  @ApiBearerAuth()
+
   @Post('/linked-banks/add')
   @Roles(Role.PASSENGER, Role.DRIVER)
   async linkBankAccount(
@@ -72,7 +74,7 @@ export class WalletController {
     await this.walletService.linkBankAccount(res, req.user, body)
   }
 
-  @ApiBearerAuth()
+
   @Get('/linked-banks/:id')
   @Roles(Role.PASSENGER, Role.DRIVER)
   async getLinkedBank(
@@ -83,7 +85,7 @@ export class WalletController {
     await this.walletService.getLinkedBank(id, res, req.user)
   }
 
-  @ApiBearerAuth()
+
   @Post('/deposit')
   @Roles(Role.PASSENGER, Role.DRIVER)
   async fundWallet(
@@ -94,7 +96,7 @@ export class WalletController {
     await this.walletService.fundWallet(res, req.user, body)
   }
 
-  @ApiBearerAuth()
+
   @Post('/request-withdrawal/:linkedBankId')
   async initiateWithdrawal(
     @Req() req: IRequest,
@@ -105,27 +107,27 @@ export class WalletController {
     await this.walletService.requestWithrawal(res, linkedBankId, req.user, body)
   }
 
-  @Post('/paystack/webhook')
   @ApiOperation({
     summary: "Ignore. It's for Transfer Webhook"
   })
+  @Post('/paystack/webhook')
   async manageFiatEvents(@Req() req: Request) {
     if (!req.body || !req.body?.event || !req.body?.data) {
-      throw new BadRequestException('Invalid request body received')
+      throw new HttpException("Unauthorized IP Address", StatusCodes.BadRequest)
     }
 
     const allowedIPAddresses = ['52.31.139.75', '52.49.173.169', '52.214.14.220']
     const ipAddress = getIPAddress(req)
 
     if (!allowedIPAddresses.includes(ipAddress)) {
-      throw new UnauthorizedException("Unauthorized IP Address")
+      throw new HttpException("Unauthorized IP Address", StatusCodes.Unauthorized)
     }
 
     try {
       await this.walletService.enqueueRequest(req)
     } catch (err) {
       console.error(err)
-      throw new InternalServerErrorException("Something went wrong")
+      throw new HttpException("Something went wrong", StatusCodes.InternalServerError)
     }
   }
 }

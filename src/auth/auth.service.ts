@@ -9,6 +9,7 @@ import {
     EmergencyContactDTO,
 } from './dto/auth.dto'
 import { v4 as uuidv4 } from 'uuid'
+import { User } from '@prisma/client'
 import { JwtService } from '@nestjs/jwt'
 import { validateFile } from 'utils/file'
 import { Request, Response } from 'express'
@@ -63,36 +64,34 @@ export class AuthService {
         return access_token
     }
 
-    private async resendOtp(email_verified: boolean, email: string, userId: string) {
-        if (email_verified) {
-            const { totp, totp_expiry } = generateOTP(6)
+    private async resendOtp(user: User) {
+        const { totp, totp_expiry } = generateOTP(6)
 
-            const otp = await this.prisma.totp.findUnique({
-                where: { userId: userId },
-            })
+        const otp = await this.prisma.totp.findUnique({
+            where: { userId: user.id },
+        })
 
-            const expired = otp ? new Date() > otp.totp_expiry : false
+        const expired = otp ? new Date() > otp.totp_expiry : false
 
-            if ((!expired && !otp) || (expired && otp)) {
-                await Promise.all([
-                    this.prisma.totp.upsert({
-                        where: { userId: userId },
-                        create: {
-                            totp, totp_expiry,
-                            user: { connect: { id: userId } },
-                        },
-                        update: { totp, totp_expiry }
-                    }),
-                    this.isProd ? this.plunk.sendPlunkEmail({
-                        to: email,
-                        subject: 'Verify your email',
-                        body: `otp : ${totp}`
-                    }) : (() => {
-                        console.log(totp)
-                    })()
-                ])
-                // TODO: Email template
-            }
+        if ((!expired && !otp) || (expired && otp)) {
+            await Promise.all([
+                this.prisma.totp.upsert({
+                    where: { userId: user.id },
+                    create: {
+                        totp, totp_expiry,
+                        user: { connect: { id: user.id } },
+                    },
+                    update: { totp, totp_expiry }
+                }),
+                this.isProd ? this.plunk.sendPlunkEmail({
+                    to: user.email,
+                    subject: 'Verify your email',
+                    body: `otp : ${totp}`
+                }) : (() => {
+                    console.log(totp)
+                })()
+            ])
+            // TODO: Email template
         }
     }
 
@@ -196,7 +195,9 @@ export class AuthService {
         })
 
         res.on('finish', async () => {
-            this.resendOtp(user.profile.email_verified, user.email, user.id)
+            if (!user.profile.email_verified) {
+                await this.resendOtp(user)
+            }
         })
     }
 
@@ -262,7 +263,9 @@ export class AuthService {
         })
 
         res.on('finish', async () => {
-            this.resendOtp(user.profile.email_verified, user.email, user.id)
+            if (!user.profile.email_verified) {
+                await this.resendOtp(user)
+            }
         })
     }
 
@@ -303,7 +306,7 @@ export class AuthService {
             })
         ])
 
-        if (as === "DRIVER") {
+        if (as === "DRIVER" && user) {
             await this.prisma.verification.create({
                 data: { driver: { connect: { id: _id } } }
             })
@@ -311,27 +314,7 @@ export class AuthService {
 
         res.on('finish', async () => {
             if (user) {
-                const { totp, totp_expiry } = generateOTP(6)
-
-                await Promise.all([
-                    this.prisma.totp.upsert({
-                        where: { userId: user.id },
-                        create: {
-                            totp, totp_expiry,
-                            user: { connect: { id: user.id } },
-                        },
-                        update: { totp, totp_expiry, }
-                    }),
-                    this.isProd ? this.plunk.sendPlunkEmail({
-                        to: email,
-                        subject: 'Verify your email',
-                        body: `otp : ${totp}`
-                    }) : (() => {
-                        console.log(totp)
-                    })()
-                ])
-
-                // TODO: Email template
+                await this.resendOtp(user)
             }
         })
 

@@ -217,7 +217,7 @@ export class WalletService {
                 return this.response.sendError(res, StatusCodes.Forbidden, "Try again later..")
             }
 
-            if (wallet.balance < amount) {
+            if (wallet.balance.toNumber() < amount) {
                 return this.response.sendError(res, StatusCodes.UnprocessableEntity, "Insufficient balance")
             }
 
@@ -366,7 +366,7 @@ export class WalletService {
             if (transaction) {
                 await this.updateTransactionStatus(transaction.reference, toUpperCase(data.status) as TransferStatus)
 
-                const amount = this.calculateTotalAmount(data.amount, transaction.totalFee)
+                const amount = this.calculateTotalAmount(data.amount, +transaction.totalFee)
 
                 if (body.event === 'transfer.reversed' || body.event === 'transfer.failed') {
                     await this.updateUserBalance(transaction.userId, amount, 'increment')

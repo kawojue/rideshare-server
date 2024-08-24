@@ -1,7 +1,7 @@
 import { Server } from 'socket.io'
-import { CallStatus } from '@prisma/client'
 import { Injectable } from '@nestjs/common'
 import { StatusCodes } from 'enums/statusCodes'
+import { CallStatus, Role } from '@prisma/client'
 import { PrismaService } from 'prisma/prisma.service'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
 
@@ -21,6 +21,38 @@ export class RealtimeService {
     private readonly prisma: PrismaService,
     private readonly cloudinary: CloudinaryService,
   ) { }
+
+  isChatAllowed(senderRole: Role, receiverRole: Role): boolean {
+    if (
+      (senderRole === Role.DRIVER && receiverRole === Role.DRIVER) ||
+      (senderRole === Role.PASSENGER && receiverRole === Role.PASSENGER) ||
+      (senderRole === Role.ADMIN && receiverRole === Role.ADMIN) ||
+      (senderRole === Role.MODERATOR && receiverRole === Role.MODERATOR)
+    ) {
+      return false
+    }
+    return true
+  }
+
+  isCallAllowed(senderRole: Role, receiverRole: Role): boolean {
+    if (
+      (senderRole === Role.DRIVER && receiverRole === Role.DRIVER) ||
+      (senderRole === Role.PASSENGER && receiverRole === Role.PASSENGER) ||
+      (senderRole === Role.ADMIN && receiverRole === Role.ADMIN) ||
+      (senderRole === Role.MODERATOR && receiverRole === Role.MODERATOR) ||
+      (senderRole === Role.DRIVER && receiverRole === Role.ADMIN) ||
+      (senderRole === Role.DRIVER && receiverRole === Role.MODERATOR) ||
+      (senderRole === Role.PASSENGER && receiverRole === Role.ADMIN) ||
+      (senderRole === Role.PASSENGER && receiverRole === Role.MODERATOR) ||
+      (senderRole === Role.ADMIN && receiverRole === Role.DRIVER) ||
+      (senderRole === Role.ADMIN && receiverRole === Role.PASSENGER) ||
+      (senderRole === Role.MODERATOR && receiverRole === Role.DRIVER) ||
+      (senderRole === Role.MODERATOR && receiverRole === Role.PASSENGER)
+    ) {
+      return false
+    }
+    return true
+  }
 
   validateFile(file: string) {
     const maxSize = 3 << 20

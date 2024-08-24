@@ -293,8 +293,8 @@ export class ModminService {
 
             if (action === "GRANT") {
                 const amount = request.amount
-                const fee = await this.misc.calculateFees(amount)
-                const settlementAmount = amount - fee.totalFee
+                const fee = await this.misc.calculateFees(+amount)
+                const settlementAmount = amount.toNumber() - fee.totalFee
                 const amountInKobo = settlementAmount * 100
 
                 const { data: details } = await this.paystack.resolveAccount(request.linkedBank.accountNumber, request.linkedBank.bankCode)

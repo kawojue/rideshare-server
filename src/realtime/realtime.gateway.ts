@@ -100,101 +100,119 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() { content, receiverId, file }: MessageDTO
   ) {
-    const sender = this.clients.get(client)
+    try {
+      const sender = this.clients.get(client)
 
-    if (!sender) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
-      })
-      return
-    }
-
-    if (!content && !file) {
-      client.emit('validation_error', {
-        status: StatusCodes.BadRequest,
-        message: 'Blank message is not allowed',
-      })
-      return
-    }
-
-    const receiver = await this.prisma.user.findUnique({
-      where: { id: receiverId },
-    }) || await this.prisma.modmin.findUnique({
-      where: { id: receiverId },
-    })
-
-    if (!receiver) {
-      client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Receiver not found',
-      })
-      return
-    }
-
-    if (!this.isCommunicationAllowed(sender.role, receiver.role)) {
-      client.emit('error', {
-        status: StatusCodes.Forbidden,
-        message: 'You are not allowed to communicate with this user',
-      })
-      return
-    }
-
-    let inbox = await this.prisma.inbox.findFirst({
-      where: {
-        OR: [
-          {
-            userId: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? null : sender.sub,
-            modminId: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? receiver.id : null,
-          },
-          {
-            userId: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? null : receiver.id,
-            modminId: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? sender.sub : null,
-          }
-        ]
+      if (!sender) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        client.disconnect()
+        return
       }
-    })
 
-    if (!inbox) {
-      inbox = await this.prisma.inbox.create({
-        data: {
-          user: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? null : { connect: { id: sender.sub } },
-          modmin: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? { connect: { id: sender.sub } } : null,
-        }
-      })
-    }
+      console.log(content)
 
-    let serializedFile = null
-    if (file) {
-      const validationResult = this.realtimeService.validateFile(file)
-      if (validationResult?.status) {
-        client.emit('validation_error', {
-          status: validationResult.status,
-          message: validationResult.message,
+      if (!content && !file) {
+        client.emit('error', {
+          status: StatusCodes.BadRequest,
+          message: 'Blank message is not allowed',
         })
         return
       }
-      serializedFile = await this.realtimeService.saveFile(validationResult.file)
+
+      const receiver = await this.prisma.user.findUnique({
+        where: { id: receiverId },
+      }) || await this.prisma.modmin.findUnique({
+        where: { id: receiverId },
+      })
+
+      if (!receiver) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Receiver not found',
+        })
+        return
+      }
+
+      if (!this.realtimeService.isChatAllowed(sender.role, receiver.role)) {
+        client.emit('error', {
+          status: StatusCodes.Forbidden,
+          message: 'You are not allowed to communicate with this user',
+        })
+        return
+      }
+
+      let inbox = await this.prisma.inbox.findFirst({
+        where: {
+          OR: [
+            {
+              userId: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? null : sender.sub,
+              modminId: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? receiver.id : null,
+            },
+            {
+              userId: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? null : receiver.id,
+              modminId: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? sender.sub : null,
+            }
+          ]
+        }
+      })
+
+      if (!inbox) {
+        inbox = await this.prisma.inbox.create({
+          data: {
+            user: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? null : { connect: { id: sender.sub } },
+            modmin: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? { connect: { id: sender.sub } } : null,
+          }
+        })
+      }
+
+      let serializedFile = null
+      if (file) {
+        const validationResult = this.realtimeService.validateFile(file)
+        if (validationResult?.status) {
+          client.emit('error', {
+            status: validationResult.status,
+            message: validationResult.message,
+          })
+          return
+        }
+        serializedFile = await this.realtimeService.saveFile(validationResult.file)
+      }
+
+      const userSenderId = sender?.role === Role.ADMIN || sender?.role === Role.MODERATOR ? undefined : sender?.sub ?? undefined
+      const modminSenderId = sender?.role === Role.ADMIN || sender?.role === Role.MODERATOR ? sender?.sub ?? null : null
+      const userReceiverId = receiver?.role === Role.ADMIN || receiver?.role === Role.MODERATOR ? null : receiver?.id ?? null
+      const modminReceiverId = receiver?.role === Role.ADMIN || receiver?.role === Role.MODERATOR ? receiver?.id ?? null : null
+
+      const message = await this.prisma.message.create({
+        data: {
+          content,
+          file: serializedFile,
+          userSenderId,
+          modminSenderId,
+          userReceiverId,
+          modminReceiverId,
+          inboxId: inbox.id,
+        },
+      })
+
+      console.log(message)
+
+      const alignedMessage = {
+        ...message,
+        alignment: 'right',
+      }
+
+      client.emit('message_sent', alignedMessage)
+      this.server.to(this.onlineUsers.get(receiver.id)).emit('new_message', { ...message, alignment: 'left' })
+    } catch (err) {
+      client.emit('error', {
+        status: StatusCodes.InternalServerError,
+        message: err.message
+      })
     }
-
-    const message = await this.prisma.message.create({
-      data: {
-        content: content, file: serializedFile,
-        userSender: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? null : { connect: { id: sender.sub } },
-        modminSender: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? { connect: { id: sender.sub } } : null,
-        userReceiver: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? null : { connect: { id: receiver.id } },
-        modminReceiver: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? { connect: { id: receiver.id } } : null,
-        inbox: { connect: { id: inbox.id } },
-      },
-    })
-
-    const alignedMessage = {
-      ...message,
-      alignment: 'right',
-    }
-
-    client.emit('message_sent', alignedMessage)
-    this.server.to(receiver.id).emit('new_message', { ...message, alignment: 'left' })
   }
 
   @SubscribeMessage('check_online_status')
@@ -218,97 +236,113 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
 
   @SubscribeMessage('get_admins_and_moderators')
   async handleGetAdminsAndModerators(@ConnectedSocket() client: Socket) {
-    const user = this.clients.get(client)
+    try {
+      const user = this.clients.get(client)
 
-    if (!user) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
+      if (!user) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        return
+      }
+
+      if (user.role === Role.MODERATOR || user.role === Role.ADMIN) {
+        client.emit('error', {
+          status: StatusCodes.Forbidden,
+          message: 'Not allowed',
+        })
+        return
+      }
+
+      const adminsAndModerators = await this.prisma.user.findMany({
+        where: {
+          OR: [
+            { role: Role.ADMIN },
+            { role: Role.MODERATOR },
+          ],
+        },
       })
-      return
-    }
 
-    if (user.role === Role.MODERATOR || user.role === Role.ADMIN) {
-      client.emit('error', {
-        status: StatusCodes.Forbidden,
-        message: 'Not allowed',
+      const sortedAdminsAndModerators = adminsAndModerators.sort((a, b) => {
+        const aOnline = this.onlineUsers.has(a.id)
+        const bOnline = this.onlineUsers.has(b.id)
+        return Number(bOnline) - Number(aOnline)
       })
-      return
+
+      client.emit('admins_and_moderators', sortedAdminsAndModerators)
+    } catch (err) {
+      client.emit('error', {
+        status: StatusCodes.InternalServerError,
+        message: err.message
+      })
     }
-
-    const adminsAndModerators = await this.prisma.user.findMany({
-      where: {
-        OR: [
-          { role: Role.ADMIN },
-          { role: Role.MODERATOR },
-        ],
-      },
-    })
-
-    const sortedAdminsAndModerators = adminsAndModerators.sort((a, b) => {
-      const aOnline = this.onlineUsers.has(a.id)
-      const bOnline = this.onlineUsers.has(b.id)
-      return Number(bOnline) - Number(aOnline)
-    })
-
-    client.emit('admins_and_moderators', sortedAdminsAndModerators)
   }
 
   @SubscribeMessage('fetch_inboxes')
   async handleFetchInboxes(@ConnectedSocket() client: Socket) {
-    const sender = this.clients.get(client)
+    try {
 
-    if (!sender) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
-      })
-      return
-    }
+      const sender = this.clients.get(client)
 
-    const inboxes = await this.prisma.inbox.findMany({
-      where: {
-        OR: [
-          { userId: sender.sub },
-          { modminId: sender.sub },
-        ],
-      },
-      include: {
-        messages: { take: 1, orderBy: { updatedAt: 'asc' } },
-        user: {
-          select: {
-            id: true,
-            role: true,
-            profile: {
-              select: {
-                avatar: true,
-              }
-            },
-            lastname: true,
-            firstname: true,
-          }
-        },
-        modmin: {
-          select: {
-            id: true,
-            role: true,
-            fullname: true,
-          }
-        },
-      },
-    })
-
-    const inboxesWithUnreadCounts = await Promise.all(inboxes.map(async (inbox) => {
-      const unreadCount = await this.prisma.message.count({
-        where: { inboxId: inbox.id, read: false }
-      })
-      return {
-        ...inbox,
-        unreadCount
+      if (!sender) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        client.disconnect()
+        return
       }
-    }))
 
-    client.emit('inboxes', inboxesWithUnreadCounts)
+      const inboxes = await this.prisma.inbox.findMany({
+        where: {
+          OR: [
+            { userId: sender.sub },
+            { modminId: sender.sub },
+          ],
+        },
+        include: {
+          messages: { take: 1, orderBy: { updatedAt: 'asc' } },
+          user: {
+            select: {
+              id: true,
+              role: true,
+              profile: {
+                select: {
+                  avatar: true,
+                }
+              },
+              lastname: true,
+              firstname: true,
+            }
+          },
+          modmin: {
+            select: {
+              id: true,
+              role: true,
+              fullname: true,
+            }
+          },
+        },
+      })
+
+      const inboxesWithUnreadCounts = await Promise.all(inboxes.map(async (inbox) => {
+        const unreadCount = await this.prisma.message.count({
+          where: { inboxId: inbox.id, read: false }
+        })
+        return {
+          ...inbox,
+          unreadCount
+        }
+      }))
+
+      client.emit('inboxes', inboxesWithUnreadCounts)
+    } catch (err) {
+      client.emit('error', {
+        status: StatusCodes.InternalServerError,
+        message: err.message
+      })
+    }
   }
 
   @SubscribeMessage('get_inbox')
@@ -316,85 +350,93 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() { receiverId }: ReceiverDTO,
   ) {
-    const sender = this.clients.get(client)
+    try {
+      const sender = this.clients.get(client)
 
-    if (!sender) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
+      if (!sender) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        client.disconnect()
+        return
+      }
+
+      const receiver = await this.prisma.user.findUnique({
+        where: { id: receiverId },
+      }) || await this.prisma.modmin.findUnique({
+        where: { id: receiverId },
       })
-      return
-    }
 
-    const receiver = await this.prisma.user.findUnique({
-      where: { id: receiverId },
-    }) || await this.prisma.modmin.findUnique({
-      where: { id: receiverId },
-    })
+      if (!receiver) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Receiver not found',
+        })
+        return
+      }
 
-    if (!receiver) {
-      client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Receiver not found',
-      })
-      return
-    }
+      if (!this.realtimeService.isChatAllowed(sender.role, receiver.role)) {
+        client.emit('error', {
+          status: StatusCodes.Forbidden,
+          message: 'You are not allowed to communicate with this user',
+        })
+        return
+      }
 
-    if (!this.isCommunicationAllowed(sender.role, receiver.role)) {
-      client.emit('error', {
-        status: StatusCodes.Forbidden,
-        message: 'You are not allowed to communicate with this user',
-      })
-      return
-    }
-
-    const inbox = await this.prisma.inbox.findFirst({
-      where: {
-        OR: [
-          {
-            userId: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? null : sender.sub,
-            modminId: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? receiver.id : null,
-          },
-          {
-            userId: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? null : receiver.id,
-            modminId: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? sender.sub : null,
-          }
-        ]
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            role: true,
-            profile: {
-              select: {
-                avatar: true,
-
-              }
+      const inbox = await this.prisma.inbox.findFirst({
+        where: {
+          OR: [
+            {
+              userId: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? null : sender.sub,
+              modminId: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? receiver.id : null,
             },
-            lastname: true,
-            firstname: true,
-          }
+            {
+              userId: receiver.role === Role.ADMIN || receiver.role === Role.MODERATOR ? null : receiver.id,
+              modminId: sender.role === Role.ADMIN || sender.role === Role.MODERATOR ? sender.sub : null,
+            }
+          ]
         },
-        modmin: {
-          select: {
-            id: true,
-            role: true,
-            fullname: true,
-          }
-        },
-      },
-    })
+        include: {
+          user: {
+            select: {
+              id: true,
+              role: true,
+              profile: {
+                select: {
+                  avatar: true,
 
-    if (!inbox) {
-      client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Inbox not found',
+                }
+              },
+              lastname: true,
+              firstname: true,
+            }
+          },
+          modmin: {
+            select: {
+              id: true,
+              role: true,
+              fullname: true,
+            }
+          },
+        },
       })
-      return
-    }
 
-    client.emit('inbox', inbox)
+      if (!inbox) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Inbox not found',
+        })
+        return
+      }
+
+      client.emit('inbox', inbox)
+    } catch (err) {
+      client.emit('error', {
+        status: StatusCodes.InternalServerError,
+        message: err.message
+      })
+    }
   }
 
   @SubscribeMessage('fetch_messages')
@@ -402,93 +444,69 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() { inboxId }: FetchMessagesDTO
   ) {
-    const sender = this.clients.get(client)
+    try {
+      const sender = this.clients.get(client)
 
-    if (!sender) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
+      if (!sender) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        client.disconnect()
+        return
+      }
+
+      const inbox = await this.realtimeService.getInbox(inboxId)
+
+      if (!inbox) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Inbox not found',
+        })
+        return
+      }
+
+      if (
+        (sender.role === Role.ADMIN || sender.role === Role.MODERATOR) &&
+        inbox.modminId !== sender.sub
+      ) {
+        client.emit('error', {
+          status: StatusCodes.Forbidden,
+          message: 'You are not allowed to access this inbox',
+        })
+        return
+      } else if (
+        (sender.role === Role.DRIVER || sender.role === Role.PASSENGER) &&
+        inbox.userId !== sender.sub
+      ) {
+        client.emit('error', {
+          status: StatusCodes.Forbidden,
+          message: 'You are not allowed to access this inbox',
+        })
+        return
+      }
+
+      const messages = await this.prisma.message.findMany({
+        where: { inboxId: inbox.id }
       })
-      return
-    }
 
-    const inbox = await this.realtimeService.getInbox(inboxId)
+      const messagesWithAlignment = messages.map(message => ({
+        ...message,
+        alignment: message.userSenderId === sender.sub || message.modminSenderId === sender.sub ? 'right' : 'left'
+      }))
 
-    if (!inbox) {
-      client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Inbox not found',
+      client.emit('messages', { inbox, messages: messagesWithAlignment })
+
+      await this.prisma.message.updateMany({
+        where: { inboxId: inbox.id, read: false },
+        data: { read: true },
       })
-      return
-    }
-
-    if (
-      (sender.role === Role.ADMIN || sender.role === Role.MODERATOR) &&
-      inbox.modminId !== sender.sub
-    ) {
+    } catch (err) {
       client.emit('error', {
-        status: StatusCodes.Forbidden,
-        message: 'You are not allowed to access this inbox',
+        status: StatusCodes.InternalServerError,
+        message: err.message
       })
-      return
-    } else if (
-      (sender.role === Role.DRIVER || sender.role === Role.PASSENGER) &&
-      inbox.userId !== sender.sub
-    ) {
-      client.emit('error', {
-        status: StatusCodes.Forbidden,
-        message: 'You are not allowed to access this inbox',
-      })
-      return
     }
-
-    const messages = await this.prisma.message.findMany({
-      where: { inboxId: inbox.id }
-    })
-
-    const messagesWithAlignment = messages.map(message => ({
-      ...message,
-      alignment: message.userSenderId === sender.sub || message.modminSenderId === sender.sub ? 'right' : 'left'
-    }))
-
-    client.emit('messages', { inbox, messages: messagesWithAlignment })
-
-    await this.prisma.message.updateMany({
-      where: { inboxId: inbox.id, read: false },
-      data: { read: true },
-    })
-  }
-
-  private isCommunicationAllowed(senderRole: Role, receiverRole: Role): boolean {
-    if (
-      (senderRole === Role.DRIVER && receiverRole === Role.DRIVER) ||
-      (senderRole === Role.PASSENGER && receiverRole === Role.PASSENGER) ||
-      (senderRole === Role.ADMIN && receiverRole === Role.ADMIN) ||
-      (senderRole === Role.MODERATOR && receiverRole === Role.MODERATOR)
-    ) {
-      return false
-    }
-    return true
-  }
-
-  private isCallAllowed(senderRole: Role, receiverRole: Role): boolean {
-    if (
-      (senderRole === Role.DRIVER && receiverRole === Role.DRIVER) ||
-      (senderRole === Role.PASSENGER && receiverRole === Role.PASSENGER) ||
-      (senderRole === Role.ADMIN && receiverRole === Role.ADMIN) ||
-      (senderRole === Role.MODERATOR && receiverRole === Role.MODERATOR) ||
-      (senderRole === Role.DRIVER && receiverRole === Role.ADMIN) ||
-      (senderRole === Role.DRIVER && receiverRole === Role.MODERATOR) ||
-      (senderRole === Role.PASSENGER && receiverRole === Role.ADMIN) ||
-      (senderRole === Role.PASSENGER && receiverRole === Role.MODERATOR) ||
-      (senderRole === Role.ADMIN && receiverRole === Role.DRIVER) ||
-      (senderRole === Role.ADMIN && receiverRole === Role.PASSENGER) ||
-      (senderRole === Role.MODERATOR && receiverRole === Role.DRIVER) ||
-      (senderRole === Role.MODERATOR && receiverRole === Role.PASSENGER)
-    ) {
-      return false
-    }
-    return true
   }
 
   @SubscribeMessage('make_call')
@@ -496,53 +514,61 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() { receiverId }: ReceiverDTO,
   ) {
-    const sender = this.clients.get(client)
+    try {
+      const caller = this.clients.get(client)
 
-    if (!sender) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
+      if (!caller) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        client.disconnect()
+        return
+      }
+
+      const receiver = await this.prisma.user.findUnique({
+        where: { id: receiverId },
       })
-      return
-    }
 
-    const receiver = await this.prisma.user.findUnique({
-      where: { id: receiverId },
-    })
+      if (!receiver) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Receiver not found',
+        })
+        return
+      }
 
-    if (!receiver) {
-      client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Receiver not found',
+      if (!this.realtimeService.isCallAllowed(caller.role, receiver.role)) {
+        client.emit('error', {
+          status: StatusCodes.Forbidden,
+          message: 'You are not allowed to call this user',
+        })
+        return
+      }
+
+      const log = await this.realtimeService.logCall({
+        callerId: caller.sub,
+        receiverId: receiverId,
+        callStatus: 'INITIATED',
       })
-      return
-    }
 
-    if (!this.isCallAllowed(sender.role, receiver.role)) {
+      if (!this.onlineUsers.has(receiverId)) {
+        client.emit('error', {
+          status: StatusCodes.UnprocessableEntity,
+          message: 'Receiver is not online',
+        })
+        await this.realtimeService.updateCallStatus(log.id, 'MISSED')
+        return
+      }
+
+      this.server.to(this.onlineUsers.get(receiverId)).emit('incoming_call', { log })
+      client.emit('call_made', { message: 'Call initiated', log })
+    } catch (err) {
       client.emit('error', {
-        status: StatusCodes.Forbidden,
-        message: 'You are not allowed to call this user',
+        status: StatusCodes.InternalServerError,
+        message: err.message
       })
-      return
     }
-
-    const log = await this.realtimeService.logCall({
-      callerId: sender.sub,
-      receiverId: receiverId,
-      callStatus: 'INITIATED',
-    })
-
-    if (!this.onlineUsers.has(receiverId)) {
-      await this.realtimeService.updateCallStatus(log.id, 'MISSED')
-      client.emit('error', {
-        status: StatusCodes.UnprocessableEntity,
-        message: 'Receiver is not online',
-      })
-      return
-    }
-
-    this.server.to(this.onlineUsers.get(receiverId)).emit('incoming_call', { log })
-    client.emit('call_made', { message: 'Call initiated', log })
   }
 
   @SubscribeMessage('answer_call')
@@ -550,50 +576,55 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() { callerId }: CallerDTO,
   ) {
-    const receiver = this.clients.get(client)
+    try {
+      const receiver = this.clients.get(client)
 
-    if (!receiver) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
+      if (!receiver) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        client.disconnect()
+        return
+      }
+
+      const log = await this.prisma.callLog.findFirst({
+        where: {
+          callerId,
+          receiverId: receiver.sub,
+          callStatus: 'INITIATED',
+        },
+        orderBy: { createdAt: 'desc' },
       })
-      return
-    }
 
-    const log = await this.prisma.callLog.findFirst({
-      where: {
-        callerId,
-        receiverId: receiver.sub,
-        callStatus: 'INITIATED',
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+      if (!log) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Call log not found',
+        })
+        return
+      }
 
-    if (!log) {
+      if (!this.onlineUsers.has(callerId)) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Caller is not online',
+        })
+        return
+      }
+
+      this.server.to(this.onlineUsers.get(callerId)).emit('call_answered', { log })
+      await Promise.all([
+        this.realtimeService.updateCallStatus(log.id, 'ANSWERED'),
+        this.realtimeService.setStartTime(log.id),
+      ])
+      client.emit('call_answered', { message: 'Call answered', log })
+    } catch (err) {
       client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Call log not found',
+        status: StatusCodes.InternalServerError,
+        message: err.message
       })
-      return
     }
-
-    await Promise.all([
-      this.realtimeService.updateCallStatus(log.id, 'ANSWERED'),
-      this.realtimeService.setStartTime(log.id),
-    ])
-
-    if (!this.onlineUsers.has(callerId)) {
-      client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Caller is not online',
-      })
-      return
-    }
-
-    this.server.to(this.onlineUsers.get(callerId)).emit('call_answered', { log })
-    client.emit('call_answered', { message: 'Call answered', log })
   }
 
   @SubscribeMessage('reject_call')
@@ -601,47 +632,54 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() { callerId }: CallerDTO,
   ) {
-    const receiver = this.clients.get(client)
+    try {
+      const receiver = this.clients.get(client)
 
-    if (!receiver) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
+      if (!receiver) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        client.disconnect()
+        return
+      }
+
+      const log = await this.prisma.callLog.findFirst({
+        where: {
+          callerId,
+          receiverId: receiver.sub,
+          callStatus: 'INITIATED',
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
       })
-      return
-    }
 
-    const log = await this.prisma.callLog.findFirst({
-      where: {
-        callerId,
-        receiverId: receiver.sub,
-        callStatus: 'INITIATED',
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+      if (!log) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Call log not found',
+        })
+        return
+      }
 
-    if (!log) {
+      if (!this.onlineUsers.has(callerId)) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Caller is not online',
+        })
+        return
+      }
+
+      this.server.to(this.onlineUsers.get(callerId)).emit('call_rejected', { log })
+      await this.realtimeService.updateCallStatus(log.id, 'REJECTED')
+      client.emit('call_rejected', { message: 'Call rejected', log })
+    } catch (err) {
       client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Call log not found',
+        status: StatusCodes.InternalServerError,
+        message: err.message
       })
-      return
     }
-
-    await this.realtimeService.updateCallStatus(log.id, 'REJECTED')
-
-    if (!this.onlineUsers.has(callerId)) {
-      client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Caller is not online',
-      })
-      return
-    }
-
-    this.server.to(this.onlineUsers.get(callerId)).emit('call_rejected', { log })
-    client.emit('call_rejected', { message: 'Call rejected', log })
   }
 
   @SubscribeMessage('end_call')
@@ -649,123 +687,138 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     @ConnectedSocket() client: Socket,
     @MessageBody() { receiverId }: { receiverId: string },
   ) {
-    const caller = this.clients.get(client)
+    try {
+      const caller = this.clients.get(client)
 
-    if (!caller) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
+      if (!caller) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        client.disconnect()
+        return
+      }
+
+      const log = await this.prisma.callLog.findFirst({
+        where: {
+          callerId: caller.sub,
+          receiverId,
+          callStatus: 'ANSWERED',
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
       })
-      return
-    }
 
-    const log = await this.prisma.callLog.findFirst({
-      where: {
-        callerId: caller.sub,
-        receiverId,
-        callStatus: 'ANSWERED',
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+      if (!log) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Call log not found',
+        })
+        return
+      }
 
-    if (!log) {
+      await Promise.all([
+        this.realtimeService.updateCallStatus(log.id, 'ENDED'),
+        this.realtimeService.setEndTime(log.id)
+      ])
+
+      if (!this.onlineUsers.has(receiverId)) {
+        client.emit('error', {
+          status: StatusCodes.NotFound,
+          message: 'Receiver is not online',
+        })
+        return
+      }
+
+      this.server.to(this.onlineUsers.get(receiverId)).emit('call_ended', { log })
+      client.emit('call_ended', { message: 'Call ended', log })
+    } catch (err) {
       client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Call log not found',
+        status: StatusCodes.InternalServerError,
+        message: err.message
       })
-      return
     }
-
-    await Promise.all([
-      this.realtimeService.updateCallStatus(log.id, 'ENDED'),
-      this.realtimeService.setEndTime(log.id)
-    ])
-
-    if (!this.onlineUsers.has(receiverId)) {
-      client.emit('error', {
-        status: StatusCodes.NotFound,
-        message: 'Receiver is not online',
-      })
-      return
-    }
-
-    this.server.to(this.onlineUsers.get(receiverId)).emit('call_ended', { log })
-    client.emit('call_ended', { message: 'Call ended', log })
   }
 
   @SubscribeMessage('fetch_call_logs')
   async handleFetchCallLogs(@ConnectedSocket() client: Socket) {
-    const user = this.clients.get(client)
+    try {
+      const user = this.clients.get(client)
 
-    if (!user) {
-      client.emit('error', {
-        status: StatusCodes.Unauthorized,
-        message: 'Unauthorized',
+      if (!user) {
+        client.emit('error', {
+          status: StatusCodes.Unauthorized,
+          message: 'Unauthorized',
+        })
+        return
+      }
+
+      const currentDate = new Date()
+      const sevenDaysAgo = new Date(currentDate)
+      sevenDaysAgo.setDate(currentDate.getDate() - 7)
+
+      const logs = await this.prisma.callLog.findMany({
+        where: {
+          OR: [
+            { callerId: user.sub },
+            { receiverId: user.sub },
+          ],
+          updatedAt: {
+            gte: sevenDaysAgo,
+            lte: currentDate,
+          },
+        },
+        include: {
+          caller: {
+            select: {
+              id: true,
+              role: true,
+              profile: {
+                select: {
+                  avatar: true,
+                }
+              },
+              phone: true,
+              email: true,
+              lastname: true,
+              firstname: true,
+            }
+          },
+          receiver: {
+            select: {
+              id: true,
+              role: true,
+              profile: {
+                select: {
+                  avatar: true,
+                }
+              },
+              phone: true,
+              email: true,
+              lastname: true,
+              firstname: true,
+            }
+          }
+        },
+        orderBy: { updatedAt: 'desc' }
       })
-      return
+
+      const logsWithDuration = logs.map(log => {
+        const durationInSeconds = log.startTime && log.endTime ? (log.endTime.getTime() - log.startTime.getTime()) / 1000 : null
+
+        const formattedDuration = formatDuration(durationInSeconds)
+
+        return { ...log, duration: formattedDuration }
+      })
+
+      client.emit('call_logs', { logs: logsWithDuration })
+    } catch (err) {
+      client.emit('error', {
+        status: StatusCodes.InternalServerError,
+        message: err.message
+      })
     }
-
-    const currentDate = new Date()
-    const sevenDaysAgo = new Date(currentDate)
-    sevenDaysAgo.setDate(currentDate.getDate() - 7)
-
-    const logs = await this.prisma.callLog.findMany({
-      where: {
-        OR: [
-          { callerId: user.sub },
-          { receiverId: user.sub },
-        ],
-        updatedAt: {
-          gte: sevenDaysAgo,
-          lte: currentDate,
-        },
-      },
-      include: {
-        caller: {
-          select: {
-            id: true,
-            role: true,
-            profile: {
-              select: {
-                avatar: true,
-              }
-            },
-            phone: true,
-            email: true,
-            lastname: true,
-            firstname: true,
-          }
-        },
-        receiver: {
-          select: {
-            id: true,
-            role: true,
-            profile: {
-              select: {
-                avatar: true,
-              }
-            },
-            phone: true,
-            email: true,
-            lastname: true,
-            firstname: true,
-          }
-        }
-      },
-      orderBy: { updatedAt: 'desc' }
-    })
-
-    const logsWithDuration = logs.map(log => {
-      const durationInSeconds = log.startTime && log.endTime ? (log.endTime.getTime() - log.startTime.getTime()) / 1000 : null
-
-      const formattedDuration = formatDuration(durationInSeconds)
-
-      return { ...log, duration: formattedDuration }
-    })
-
-    client.emit('call_logs', { logs: logsWithDuration })
   }
 
   // TODO: fetch users (driver-passenger)

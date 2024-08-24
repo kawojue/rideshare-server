@@ -157,7 +157,7 @@ export class AnalyticsService {
                         }
                     })
 
-                    const totalAmount = amount._sum.amount || 0
+                    const totalAmount = amount._sum.amount.toNumber() || 0
                     chart.push({ label: labels[i], amount: totalAmount.toString() })
                     total += totalAmount
                 }
@@ -178,7 +178,7 @@ export class AnalyticsService {
                         }
                     })
 
-                    const totalAmount = amount._sum.amount || 0
+                    const totalAmount = amount._sum.amount.toNumber() || 0
                     chart.push({ label: labels[i], amount: totalAmount.toString() })
                     total += totalAmount
                 }

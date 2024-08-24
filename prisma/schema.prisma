@@ -178,7 +178,7 @@ model TxHistory {
   id                       String         @id @default(uuid()) @db.Uuid
   ip                       String?
   status                   TransferStatus
-  amount                   Float          @default(0.00)
+  amount                   Decimal        @default(0.00) @db.Decimal(10, 2)
   type                     TxType
   description              String?
   channel                  String?
@@ -186,9 +186,9 @@ model TxHistory {
   transfer_code            String?
   recipient_code           String?
   authorization_code       String?
-  totalFee                 Float          @default(0.00)
-  paystackFee              Float          @default(0.00)
-  processingFee            Float          @default(0.00)
+  totalFee                 Decimal        @default(0.00) @db.Decimal(10, 2)
+  paystackFee              Decimal        @default(0.00) @db.Decimal(10, 2)
+  processingFee            Decimal        @default(0.00) @db.Decimal(10, 2)
   destinationBankCode      String?
   destinationBankName      String?
   destinationAccountName   String?
@@ -203,9 +203,9 @@ model TxHistory {
 model Wallet {
   id                  String    @id @default(uuid()) @db.Uuid
   locked              Boolean   @default(false)
-  balance             Float     @default(0.00)
-  lastApprovedAmount  Float     @default(0.00)
-  lastDepositedAmount Float     @default(0.00)
+  balance             Decimal   @default(0.00) @db.Decimal(10, 2)
+  lastApprovedAmount  Decimal   @default(0.00) @db.Decimal(10, 2)
+  lastDepositedAmount Decimal   @default(0.00) @db.Decimal(10, 2)
   lastDepositedAt     DateTime?
   lastApprovedAt      DateTime?
   lastRequestedAt     DateTime?
@@ -218,7 +218,7 @@ model Wallet {
 
 model WithdrwalRequest {
   id        String       @id @default(uuid()) @db.Uuid
-  amount    Float
+  amount    Decimal      @db.Decimal(10, 2)
   locked    Boolean      @default(false)
   status    PayoutStatus @default(PENDING)
   createdAt DateTime     @default(now())
