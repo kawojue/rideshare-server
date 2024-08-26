@@ -112,8 +112,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
         return
       }
 
-      console.log(content)
-
       if (!content && !file) {
         client.emit('error', {
           status: StatusCodes.BadRequest,
@@ -197,8 +195,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
           inboxId: inbox.id,
         },
       })
-
-      console.log(message)
 
       const alignedMessage = {
         ...message,

@@ -126,7 +126,7 @@ export class RealtimeService {
     receiverId: string
     callStatus: CallStatus
   }) {
-    return this.prisma.callLog.create({
+    return await this.prisma.callLog.create({
       data: {
         callStatus: data.callStatus,
         caller: { connect: { id: data.callerId } },
@@ -136,21 +136,21 @@ export class RealtimeService {
   }
 
   async updateCallStatus(callId: string, status: CallStatus) {
-    return this.prisma.callLog.update({
+    return await this.prisma.callLog.update({
       where: { id: callId },
       data: { callStatus: status },
     })
   }
 
   async setStartTime(callId: string) {
-    return this.prisma.callLog.update({
+    return await this.prisma.callLog.update({
       where: { id: callId },
       data: { startTime: new Date() },
     })
   }
 
   async setEndTime(callId: string) {
-    return this.prisma.callLog.update({
+    return await this.prisma.callLog.update({
       where: { id: callId },
       data: { endTime: new Date() },
     })
