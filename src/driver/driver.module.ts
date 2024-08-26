@@ -21,5 +21,6 @@ import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
     ResponseService,
     CloudinaryService,
   ],
+  exports: [DriverService]
 })
 export class DriverModule { }
