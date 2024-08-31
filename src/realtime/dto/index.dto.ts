@@ -6,6 +6,7 @@ import {
 } from "class-validator"
 import { v4 as uuidv4 } from 'uuid'
 import { ApiProperty } from "@nestjs/swagger"
+import { PaginationBaseDTO } from "src/app/dto/pagination.dto"
 
 
 export class MessageDTO {
@@ -50,7 +51,7 @@ export class ReceiverDTO {
     receiverId: string
 }
 
-export class FetchMessagesDTO {
+export class FetchMessagesDTO extends PaginationBaseDTO {
     @ApiProperty({
         example: uuidv4()
     })

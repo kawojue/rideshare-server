@@ -22,6 +22,7 @@ import { StatusCodes } from 'enums/statusCodes'
 import { RealtimeService } from './realtime.service'
 import { formatDuration } from 'helpers/transformer'
 import { PrismaService } from 'prisma/prisma.service'
+import { PaginationBaseDTO } from 'src/app/dto/pagination.dto'
 
 @WebSocketGateway({
   transports: ['polling', 'websocket'],
@@ -230,8 +231,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
     client.emit('online_status', { targetUserId, isOnline })
   }
 
-  @SubscribeMessage('get_admins_and_moderators')
-  async handleGetAdminsAndModerators(@ConnectedSocket() client: Socket) {
+  @SubscribeMessage('get_modmins')
+  async handleGetModmins(@ConnectedSocket() client: Socket) {
     try {
       const user = this.clients.get(client)
 
@@ -243,30 +244,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
         return
       }
 
-      if (user.role === Role.MODERATOR || user.role === Role.ADMIN) {
-        client.emit('error', {
-          status: StatusCodes.Forbidden,
-          message: 'Not allowed',
-        })
-        return
-      }
+      const modmins = await this.prisma.modmin.findMany()
 
-      const adminsAndModerators = await this.prisma.user.findMany({
-        where: {
-          OR: [
-            { role: Role.ADMIN },
-            { role: Role.MODERATOR },
-          ],
-        },
-      })
-
-      const sortedAdminsAndModerators = adminsAndModerators.sort((a, b) => {
+      const sortedModmins = modmins.sort((a, b) => {
         const aOnline = this.onlineUsers.has(a.id)
         const bOnline = this.onlineUsers.has(b.id)
         return Number(bOnline) - Number(aOnline)
       })
 
-      client.emit('admins_and_moderators', sortedAdminsAndModerators)
+      client.emit('modmins', sortedModmins)
     } catch (err) {
       client.emit('error', {
         status: StatusCodes.InternalServerError,
@@ -276,9 +262,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
   }
 
   @SubscribeMessage('fetch_inboxes')
-  async handleFetchInboxes(@ConnectedSocket() client: Socket) {
+  async handleFetchInboxes(
+    @ConnectedSocket() client: Socket,
+    { page = 1, limit = 10 }: PaginationBaseDTO
+  ) {
     try {
-
       const sender = this.clients.get(client)
 
       if (!sender) {
@@ -289,6 +277,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
         client.disconnect()
         return
       }
+
+      page = Number(page)
+      limit = Number(limit)
+
+      const offset = (page - 1) * limit
 
       const inboxes = await this.prisma.inbox.findMany({
         where: {
@@ -320,6 +313,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
             }
           },
         },
+        orderBy: { updatedAt: 'desc' },
+        skip: offset,
+        take: limit
       })
 
       const inboxesWithUnreadCounts = await Promise.all(inboxes.map(async (inbox) => {
@@ -400,8 +396,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
               role: true,
               profile: {
                 select: {
-                  avatar: true,
-
+                  avatar: true
                 }
               },
               lastname: true,
@@ -438,7 +433,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
   @SubscribeMessage('fetch_messages')
   async handleFetchMessages(
     @ConnectedSocket() client: Socket,
-    @MessageBody() { inboxId }: FetchMessagesDTO
+    @MessageBody() { inboxId, page = 1, limit = 30 }: FetchMessagesDTO
   ) {
     try {
       const sender = this.clients.get(client)
@@ -452,6 +447,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
         return
       }
 
+      page = Number(page)
+      limit = Number(limit)
+
+      const offset = (page - 1) * limit
+
       const inbox = await this.realtimeService.getInbox(inboxId)
 
       if (!inbox) {
@@ -462,19 +462,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
         return
       }
 
-      if (
-        (sender.role === Role.ADMIN || sender.role === Role.MODERATOR) &&
-        inbox.modminId !== sender.sub
-      ) {
-        client.emit('error', {
-          status: StatusCodes.Forbidden,
-          message: 'You are not allowed to access this inbox',
-        })
-        return
-      } else if (
-        (sender.role === Role.DRIVER || sender.role === Role.PASSENGER) &&
-        inbox.userId !== sender.sub
-      ) {
+      const isAdminOrMod = sender.role === Role.ADMIN || sender.role === Role.MODERATOR
+      const isDriverOrPassenger = sender.role === Role.DRIVER || sender.role === Role.PASSENGER
+
+      const isNotAllowedAdminMod = isAdminOrMod && inbox.modminId !== sender.sub
+      const isNotAllowedDriverPassenger = isDriverOrPassenger && inbox.userId !== sender.sub
+
+      if (isNotAllowedAdminMod || isNotAllowedDriverPassenger) {
         client.emit('error', {
           status: StatusCodes.Forbidden,
           message: 'You are not allowed to access this inbox',
@@ -483,7 +477,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       }
 
       const messages = await this.prisma.message.findMany({
-        where: { inboxId: inbox.id }
+        where: { inboxId: inbox.id },
+        take: limit,
+        skip: offset,
       })
 
       const messagesWithAlignment = messages.map(message => ({

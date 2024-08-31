@@ -4,7 +4,7 @@ import { IsEnum, IsOptional } from "class-validator"
 import { PayoutStatus, TransferStatus, TxType } from "@prisma/client"
 import { SortUsers, UserEnum, SortWithdrawalRequests } from "enums/base"
 
-class PaginationBaseDTO {
+export class PaginationBaseDTO {
     @ApiProperty({
         example: 1,
         required: false,
@@ -20,7 +20,7 @@ class PaginationBaseDTO {
     limit?: number
 }
 
-class SearchBaseDTO {
+export class SearchBaseDTO {
     @ApiProperty({
         example: ' ',
         required: false,
