@@ -11,15 +11,15 @@ import {
   HttpException,
 } from '@nestjs/common'
 import { Role } from '@prisma/client'
+import { Utils } from 'helpers/utils'
 import { Request, Response } from 'express'
 import { Roles } from 'src/jwt/role.decorator'
 import { StatusCodes } from 'enums/statusCodes'
-import { MiscService } from 'libs/misc.service'
 import { WalletService } from './wallet.service'
 import { getIPAddress } from 'helpers/getIPAddress'
 import { AmountDTO, FundWalletDTO } from './dto/tx.dto'
 import { ResponseService } from 'libs/response.service'
-import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
+import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
 import { BankDetailsDTO, ValidateBankDTO } from './dto/bank.dto'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
 
@@ -29,15 +29,14 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
 @UseGuards(JwtRoleAuthGuard)
 export class WalletController {
   constructor(
-    private readonly misc: MiscService,
     private readonly response: ResponseService,
     private readonly walletService: WalletService
   ) { }
 
   @Post('/fee')
   async fee(@Res() res: Response, @Body() { amount }: AmountDTO) {
-    this.response.sendSuccess(res, StatusCodes.OK, {
-      data: await this.misc.calculateFees(amount)
+    return this.response.sendSuccess(res, StatusCodes.OK, {
+      data: Utils.calculateFees(amount)
     })
   }
 

@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common'
-import { JwtService } from '@nestjs/jwt'
-import { MiscService } from 'libs/misc.service'
 import { PassportModule } from '@nestjs/passport'
 import { PrismaService } from 'prisma/prisma.service'
 import { AnalyticsService } from './analytics.service'
@@ -12,8 +10,6 @@ import { AnalyticsController } from './analytics.controller'
   controllers: [AnalyticsController],
   providers: [
     AnalyticsService,
-    JwtService,
-    MiscService,
     PrismaService,
     ResponseService,
   ],

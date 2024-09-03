@@ -37,3 +37,10 @@ export enum Chart {
     montly = "monthly",
     weekdays = "weekdays",
 }
+
+export enum DaysToMilli {
+    "1d" = 24 * 60 * 60 * 1000,
+    "30d" = 30 * 24 * 60 * 60 * 1000,
+    "60d" = 60 * 24 * 60 * 60 * 1000,
+    "120d" = 120 * 24 * 60 * 60 * 1000,
+}

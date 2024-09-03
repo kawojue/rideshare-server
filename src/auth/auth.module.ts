@@ -9,7 +9,6 @@ import { JwtStrategy } from 'src/jwt/jwt.strategy'
 import { AuthController } from './auth.controller'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
-import { GoogleStrategy } from 'src/jwt/google.strategy'
 import { EncryptionService } from 'libs/encryption.service'
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
@@ -31,7 +30,6 @@ import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
     PlunkService,
     PrismaService,
     ConfigService,
-    GoogleStrategy,
     ResponseService,
     EncryptionService,
     CloudinaryService,

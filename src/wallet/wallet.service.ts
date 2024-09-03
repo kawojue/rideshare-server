@@ -331,7 +331,7 @@ export class WalletService {
 
             this.response.sendSuccess(res, StatusCodes.OK, { data: removeNullFields(tx) })
         } catch (err) {
-            this.misc.handlePaystackAndServerError(res, err)
+            console.error(err)
         } finally {
             release()
         }

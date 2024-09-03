@@ -1,17 +1,17 @@
-import { Role } from '@prisma/client'
+import { Request } from 'express'
 import { JwtService } from '@nestjs/jwt'
-import { Reflector } from '@nestjs/core'
 import {
-    Injectable, UnauthorizedException,
-    ExecutionContext, ForbiddenException
+    Injectable,
+    ExecutionContext,
+    UnauthorizedException,
 } from '@nestjs/common'
+import { config } from 'configs/env.config'
 import { AuthGuard } from '@nestjs/passport'
 import { PrismaService } from 'prisma/prisma.service'
 
 @Injectable()
-export class JwtRoleAuthGuard extends AuthGuard('jwt') {
+export class OnboardingGuard extends AuthGuard('jwt') {
     constructor(
-        private readonly reflector: Reflector,
         private readonly prisma: PrismaService,
         private readonly jwtService: JwtService,
     ) {
@@ -20,7 +20,7 @@ export class JwtRoleAuthGuard extends AuthGuard('jwt') {
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const ctx = context.switchToHttp()
-        const request = ctx.getRequest()
+        const request = ctx.getRequest<Request>()
 
         const result = (await super.canActivate(context)) as boolean
         if (!result) {
@@ -38,34 +38,21 @@ export class JwtRoleAuthGuard extends AuthGuard('jwt') {
 
         try {
             const decoded = await this.jwtService.verifyAsync(access_token, {
-                secret: process.env.JWT_SECRET!,
+                secret: config.jwt.secret,
                 ignoreExpiration: false,
             })
 
-            const userOrAdmin = await (this.prisma[
-                (decoded.role === 'ADMIN' || decoded.role === 'MODERATOR') ? 'modmin' : 'user'
-            ] as any).findFirst({
+            const user = await this.prisma.user.findUnique({
                 where: { id: decoded.sub, status: decoded.status },
             })
 
-            if (!userOrAdmin) {
+            if (!user) {
                 return false
             }
 
             request.user = decoded
-
-            const requiredRoles = this.reflector.get<Role[]>('roles', context.getHandler())
-            if (!requiredRoles) {
-                return true
-            }
-
-            if (!requiredRoles.includes(decoded.role)) {
-                throw new ForbiddenException('You do not have the required role to access this resource')
-            }
-
             return true
-        } catch (err) {
-            console.error(err)
+        } catch {
             throw new UnauthorizedException()
         }
     }

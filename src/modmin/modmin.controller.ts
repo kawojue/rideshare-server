@@ -25,7 +25,7 @@ import { avatars } from 'utils/avatars'
 import { Roles } from 'src/jwt/role.decorator'
 import { ModminService } from './modmin.service'
 import { WithdrawalRequestDTO } from './dto/payout.dto'
-import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
+import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
 
 @ApiTags("Moderator & Admin")

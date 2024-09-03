@@ -1,15 +1,16 @@
 import { Mutex } from 'async-mutex'
+import { config } from 'configs/env.config'
 import { PrismaService } from 'prisma/prisma.service'
 import axios, { AxiosInstance, AxiosResponse, Method } from 'axios'
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 
 @Injectable()
 export class QoreidConsumer {
-    private expires_in = 7199
+    private expires_in = 7000
 
     private prisma: PrismaService
     public axiosInstance: AxiosInstance
-    private readonly tokenMutex = new Mutex()
+    private tokenMutex = new Mutex()
 
     constructor(baseURL: string) {
         this.prisma = new PrismaService()
@@ -25,7 +26,7 @@ export class QoreidConsumer {
         return await this.prisma.cache.findFirst({
             where: {
                 type: 'QOREID',
-                key: process.env.QOREID_CLIENT_ID
+                key: config.qoreId.clientId
             }
         })
     }
@@ -44,22 +45,19 @@ export class QoreidConsumer {
 
             const response: AxiosResponse<QoreIDResponse> = await axios.post(
                 'https://api.qoreid.com/token',
-                {
-                    clientId: process.env.QOREID_CLIENT_ID,
-                    secret: process.env.QOREID_CLIENT_SECRET
-                }
+                config.qoreId
             )
 
             const { expiresIn, accessToken: newAccessToken, tokenType } = response.data
 
             await this.prisma.cache.upsert({
-                where: { type: 'QOREID', key: process.env.QOREID_CLIENT_ID },
+                where: { type: 'QOREID', key: config.qoreId.clientId },
                 create: {
                     type: 'QOREID',
                     expires_in: expiresIn,
                     token_type: tokenType,
                     access_token: newAccessToken,
-                    key: process.env.QOREID_CLIENT_ID,
+                    key: config.qoreId.clientId,
                 },
                 update: {
                     token_type: tokenType,

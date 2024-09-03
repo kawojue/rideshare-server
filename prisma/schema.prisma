@@ -8,24 +8,21 @@ datasource db {
 }
 
 model User {
-  id                   String    @id @default(uuid()) @db.Uuid
-  firstname            String
-  lastname             String
-  middlename           String?
-  status               Status    @default(ACTIVE)
-  provider             Provider
-  email                String    @unique
-  phone                String    @unique
-  provider_id          String?   @unique
-  password             String?
-  role                 Role
-  refresh_token        String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  lastUsedBiometricAt  DateTime?
-  lastUsedCredentialAt DateTime?
-  lastLoggedInAt       DateTime?
-  lastPasswordChanged  DateTime  @default(now())
+  id                  String    @id @default(uuid()) @db.Uuid
+  firstname           String
+  lastname            String
+  middlename          String?
+  status              Status    @default(ACTIVE)
+  email               String?   @unique
+  phone               String?   @unique
+  significant         String?   @unique
+  regionCode          String?   @map("region_code")
+  countryCode         String?   @map("country_code")
+  providerId          String?   @unique @map("provider_id")
+  role                Role
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  lastUsedBiometricAt DateTime? @map("last_used_biometric_at")
 
   totp         Totp?
   inbox        Inbox?
@@ -33,69 +30,105 @@ model User {
   profile      Profile?
   verification Verification?
 
+  cache                Cache[]
   vehicles             Vehicle[]
   transactionHistories TxHistory[]
   banks                LinkedBank[]
-  raters               Rating[]     @relation("RaterUser")
-  ratings              Rating[]     @relation("TargetUser")
-  sentMessages         Message[]    @relation("UserSentMessages")
-  receivedMessages     Message[]    @relation("UserReceivedMessages")
-  receivedCallLogs     CallLog[]    @relation("UserReceivedCalls")
-  initiatedCallLogs    CallLog[]    @relation("UserInitiatedCalls")
+  mobileDevices        MobileDevice[]
+  raters               Rating[]       @relation("RaterUser")
+  ratings              Rating[]       @relation("TargetUser")
+  sentMessages         Message[]      @relation("UserSentMessages")
+  receivedMessages     Message[]      @relation("UserReceivedMessages")
+  receivedCallLogs     CallLog[]      @relation("UserReceivedCalls")
+  initiatedCallLogs    CallLog[]      @relation("UserInitiatedCalls")
 
-  @@index([refresh_token])
+  @@index([role])
+  @@index([status])
+  @@index([firstname, lastname])
+  @@index([createdAt, updatedAt])
+  @@map("users")
 }
 
 model Profile {
-  id             String    @id @default(uuid()) @db.Uuid
-  avatar         Json?
-  gender         Gender
-  email_verified Boolean   @default(false)
-  pin            String?
-  lastPinChanged DateTime?
-  biometric      Boolean   @default(false)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  address        String?
+  id        String   @id @default(uuid()) @db.Uuid
+  avatar    Json?
+  gender    Gender
+  biometric Boolean  @default(false)
+  address   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   emergencyContact EmergencyContact?
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String @unique @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  @@index([gender])
+  @@index([address])
+  @@index([createdAt, updatedAt])
+  @@map("profiles")
+}
+
+model MobileDevice {
+  id                String    @id @default(uuid()) @db.Uuid
+  deviceId          String?   @map("device_id")
+  model             String
+  type              String
+  os                String
+  vendor            String?
+  lastLoggedInAt    DateTime? @map("last_logged_in_at")
+  notificationToken String?   @map("notification_token")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id") @db.Uuid
+
+  @@unique([userId, deviceId])
+  @@index([createdAt, updatedAt])
+  @@map("mobile_devices")
 }
 
 model Verification {
-  id String @id @default(uuid()) @db.Uuid
+  id        String   @id @default(uuid()) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  idNumber           String?   @unique
-  idType             IDType?
-  idVerified         Boolean   @default(false)
-  idVerifiedAt       DateTime?
-  idVerificationData Json?
+  idNumber           String?   @unique @map("id_number")
+  idType             IDType?   @map("id_type")
+  idVerified         Boolean   @default(false) @map("id_verified")
+  idVerifiedAt       DateTime? @map("id_verified_at")
+  idVerificationData Json?     @map("id_verification_data")
 
-  driverLicense         String?  @unique
-  driverLicenseData     Json?
-  driverLicenseVerified Boolean? @default(false)
+  driverLicense         String?  @unique @map("driver_license")
+  driverLicenseData     Json?    @map("driver_license_data")
+  driverLicenseVerified Boolean? @default(false) @map("driver_license_verified")
 
-  proofOfAddress  Json?
-  addressVerified Boolean? @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  proofOfAddress  Json?    @map("proof_of_address")
+  addressVerified Boolean? @default(false) @map("address_verified")
 
   driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  driverId String @unique @db.Uuid
+  driverId String @unique @map("driver_id") @db.Uuid
+
+  @@index([createdAt, updatedAt])
+  @@map("verification")
 }
 
 model EmergencyContact {
   id        String   @id @default(uuid()) @db.Uuid
-  name      String
+  fullname  String
+  address   String
+  email     String
   phone     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   profile   Profile @relation(references: [id], fields: [profileId], onDelete: Cascade)
-  profileId String  @unique @db.Uuid
+  profileId String  @unique @map("profile_id") @db.Uuid
+
+  @@index([fullname])
+  @@index([createdAt, updatedAt])
+  @@map("emergency_contacts")
 }
 
 model Vehicle {
@@ -104,74 +137,106 @@ model Vehicle {
   model             String
   classification    String
   year              String?
+  imageUrl          String?  @map("image_url")
   color             String
-  seatNumber        Int
+  seatNumber        Int      @map("seat_number")
   vin               String?  @unique
-  plateNumber       String   @unique
-  isOwner           Boolean
-  agreementDocument Json?
-  ownerName         String?
-  ownerPhoneNumber  String?
+  plateNumber       String   @unique @map("plate_number")
+  isOwner           Boolean  @map("is_ownwer")
+  agreementDocument Json?    @map("agreement_document")
+  ownerName         String?  @map("owner_name")
+  ownerPhoneNumber  String?  @map("owner_phone_number")
   verified          Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   amenity Amenity?
 
   driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  driverId String @db.Uuid
+  driverId String @map("driver_id") @db.Uuid
+
+  @@index([brand, model])
+  @@index([createdAt, updatedAt])
+  @@map("vehicles")
 }
 
 model Amenity {
   id                 String   @id @default(uuid()) @db.Uuid
   wifi               Boolean  @default(false)
   music              Boolean  @default(false)
-  phoneCharger       Boolean  @default(false)
-  temperatureControl Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  phoneCharger       Boolean  @default(false) @map("phone_charger")
+  temperatureControl Boolean  @default(false) @map("temperature_control")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   vehicle   Vehicle @relation(references: [id], fields: [vehicleId], onDelete: Cascade)
-  vehicleId String  @unique @db.Uuid
+  vehicleId String  @unique @map("vehicle_id") @db.Uuid
+
+  @@index([createdAt, updatedAt])
+  @@map("vehicle_amenities")
 }
 
 model Cache {
-  id           String    @id @default(uuid()) @db.Uuid
-  key          String    @unique
-  value        Int?
-  expires_in   String?
-  scope        String?
-  token_type   String?
-  access_token String?
-  type         CacheType
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(uuid()) @db.Uuid
+  key           String    @unique
+  value         Int?
+  expires_in    String?
+  scope         String?
+  token_type    String?
+  access_token  String?
+  refresh_token String?
+  type          CacheType
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  userId   String? @map("user_id") @db.Uuid
+  modminId String? @map("modmin_id") @db.Uuid
+
+  user   User?   @relation(references: [id], fields: [userId], onDelete: Cascade)
+  modmin Modmin? @relation(references: [id], fields: [modminId], onDelete: Cascade)
+
+  @@index([access_token])
+  @@index([refresh_token])
+  @@index([createdAt, updatedAt])
+  @@map("cache")
 }
 
 model Totp {
   id          String    @id @default(uuid()) @db.Uuid
+  key         String?   @unique
   totp        String?
   totp_expiry DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  counter     Int?
+  max         Int?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  user   User   @relation(references: [id], fields: [userId], onDelete: Cascade)
-  userId String @unique @db.Uuid
+  user   User?   @relation(references: [id], fields: [userId], onDelete: Cascade)
+  userId String? @unique @map("user_id") @db.Uuid
+
+  @@index([createdAt, updatedAt])
+  @@index([totp])
+  @@map("otps")
 }
 
 model LinkedBank {
-  id                String             @id @default(uuid()) @db.Uuid
-  bankName          String
-  accountName       String
-  accountNumber     String
-  bankCode          String
-  primary           Boolean            @default(false)
-  updatedAt         DateTime           @updatedAt
-  createdAt         DateTime           @default(now())
-  withdrawalRequest WithdrwalRequest[]
+  id            String   @id @default(uuid()) @db.Uuid
+  bankName      String   @map("bank_name")
+  accountName   String   @map("account_name")
+  accountNumber String   @map("account_number")
+  bankCode      String   @map("bank_code")
+  primary       Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  withdrawalRequests WithdrwalRequest[]
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  @@index([accountNumber, bankCode])
+  @@index([createdAt, updatedAt])
+  @@map("linked_banks")
 }
 
 model TxHistory {
@@ -186,34 +251,41 @@ model TxHistory {
   transfer_code            String?
   recipient_code           String?
   authorization_code       String?
-  totalFee                 Decimal        @default(0.00) @db.Decimal(10, 2)
-  paystackFee              Decimal        @default(0.00) @db.Decimal(10, 2)
-  processingFee            Decimal        @default(0.00) @db.Decimal(10, 2)
-  destinationBankCode      String?
-  destinationBankName      String?
-  destinationAccountName   String?
-  destinationAccountNumber String?
-  createdAt                DateTime       @default(now())
-  updatedAt                DateTime       @updatedAt
+  totalFee                 Decimal        @default(0.00) @map("total_fee") @db.Decimal(10, 2)
+  paystackFee              Decimal        @default(0.00) @map("paystack_fee") @db.Decimal(10, 2)
+  processingFee            Decimal        @default(0.00) @map("processing_fee") @db.Decimal(10, 2)
+  destinationBankCode      String?        @map("destination_bank_code")
+  destinationBankName      String?        @map("destination_bank_name")
+  destinationAccountName   String?        @map("destination_account_name")
+  destinationAccountNumber String?        @map("destination_account_number")
+  createdAt                DateTime       @default(now()) @map("created_at")
+  updatedAt                DateTime       @updatedAt @map("updated_at")
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  @@index([status])
+  @@index([createdAt, updatedAt])
+  @@map("tx_histories")
 }
 
 model Wallet {
   id                  String    @id @default(uuid()) @db.Uuid
   locked              Boolean   @default(false)
   balance             Decimal   @default(0.00) @db.Decimal(10, 2)
-  lastApprovedAmount  Decimal   @default(0.00) @db.Decimal(10, 2)
-  lastDepositedAmount Decimal   @default(0.00) @db.Decimal(10, 2)
-  lastDepositedAt     DateTime?
-  lastApprovedAt      DateTime?
-  lastRequestedAt     DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  lastApprovedAmount  Decimal   @default(0.00) @map("last_approved_amount") @db.Decimal(10, 2)
+  lastDepositedAmount Decimal   @default(0.00) @map("last_deposited_amount") @db.Decimal(10, 2)
+  lastDepositedAt     DateTime? @map("last_deposited_at")
+  lastApprovedAt      DateTime? @map("last_approved_at")
+  lastRequestedAt     DateTime? @map("last_requested_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String @unique @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  @@index([createdAt, updatedAt])
+  @@map("wallets")
 }
 
 model WithdrwalRequest {
@@ -221,59 +293,74 @@ model WithdrwalRequest {
   amount    Decimal      @db.Decimal(10, 2)
   locked    Boolean      @default(false)
   status    PayoutStatus @default(PENDING)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
 
   linkedBank   LinkedBank @relation(fields: [linkedBankId], references: [id], onDelete: NoAction)
-  linkedBankId String     @db.Uuid
+  linkedBankId String     @map("linked_bank_id") @db.Uuid
+
+  @@index([status])
+  @@index([createdAt, updatedAt])
+  @@map("withdrawal_requests")
 }
 
 model Modmin {
-  id            String   @id @default(uuid()) @db.Uuid
-  fullname      String
-  email         String   @unique
-  avatar        String?
-  refresh_token String?
-  password      String
-  role          Role
-  status        Status   @default(ACTIVE)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(uuid()) @db.Uuid
+  fullname  String
+  email     String   @unique
+  avatar    String?
+  password  String
+  role      Role
+  status    Status   @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   inbox Inbox?
 
+  cache            Cache[]
   sentMessages     Message[] @relation("ModminSentMessages")
   receivedMessages Message[] @relation("ModminReceivedMessages")
 
-  @@index([refresh_token])
+  @@index([role])
+  @@index([status])
+  @@index([fullname])
+  @@index([createdAt, updatedAt])
+  @@map("modmins")
 }
 
 model Rating {
   id        String   @id @default(uuid()) @db.Uuid
   point     Float
   review    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  targetUserId String @db.Uuid
-  raterUserId  String @db.Uuid
+  targetUserId String @map("target_user_id") @db.Uuid
+  raterUserId  String @map("rater_user_id") @db.Uuid
 
   target User @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
   rater  User @relation("RaterUser", fields: [raterUserId], references: [id], onDelete: Cascade)
+
+  @@index([point])
+  @@index([createdAt, updatedAt])
+  @@map("ratings")
 }
 
 model Inbox {
   id        String   @id @default(uuid()) @db.Uuid
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  modminId String? @unique @db.Uuid
-  userId   String? @unique @db.Uuid
+  modminId String? @unique @map("modmin_id") @db.Uuid
+  userId   String? @unique @map("user_id") @db.Uuid
 
   modmin Modmin? @relation(references: [id], fields: [modminId], onDelete: Cascade)
   user   User?   @relation(references: [id], fields: [userId], onDelete: Cascade)
 
   messages Message[]
+
+  @@index([createdAt, updatedAt])
+  @@map("inboxes")
 }
 
 model Message {
@@ -282,35 +369,42 @@ model Message {
   content   String?
   file      Json?
   read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  inboxId          String  @db.Uuid
-  userSenderId     String? @db.Uuid
-  modminSenderId   String? @db.Uuid
-  userReceiverId   String? @db.Uuid
-  modminReceiverId String? @db.Uuid
+  inboxId          String  @map("inbox_id") @db.Uuid
+  userSenderId     String? @map("user_sender_id") @db.Uuid
+  modminSenderId   String? @map("modmin_sender_id") @db.Uuid
+  userReceiverId   String? @map("user_receiver_id") @db.Uuid
+  modminReceiverId String? @map("modmin_receiver_id") @db.Uuid
 
   inbox          Inbox   @relation(fields: [inboxId], references: [id])
   userSender     User?   @relation("UserSentMessages", fields: [userSenderId], references: [id], onDelete: Cascade)
   modminSender   Modmin? @relation("ModminSentMessages", fields: [modminSenderId], references: [id], onDelete: Cascade)
   userReceiver   User?   @relation("UserReceivedMessages", fields: [userReceiverId], references: [id], onDelete: Cascade)
   modminReceiver Modmin? @relation("ModminReceivedMessages", fields: [modminReceiverId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt, updatedAt])
+  @@map("messages")
 }
 
 model CallLog {
   id         String     @id @default(uuid()) @db.Uuid
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  endTime    DateTime?
-  startTime  DateTime?
-  callStatus CallStatus
+  endTime    DateTime?  @map("end_time")
+  startTime  DateTime?  @map("start_time")
+  callStatus CallStatus @map("call_status")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
 
-  callerId   String @db.Uuid
-  receiverId String @db.Uuid
+  callerId   String @map("caller_id") @db.Uuid
+  receiverId String @map("receiver_id") @db.Uuid
 
   caller   User @relation("UserInitiatedCalls", fields: [callerId], references: [id], onDelete: Cascade)
   receiver User @relation("UserReceivedCalls", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([callStatus])
+  @@index([createdAt, updatedAt])
+  @@map("call_logs")
 }
 
 enum Role {
@@ -343,6 +437,7 @@ enum TxType {
 
 enum CacheType {
   QOREID
+  TOKEN_REFRESHER
 }
 
 enum PayoutStatus {

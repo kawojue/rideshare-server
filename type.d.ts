@@ -1,5 +1,5 @@
-type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'MODERATOR'
 type Status = 'ACTIVE' | 'SUSPENDED'
+type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'MODERATOR'
 
 interface CloudinaryModuleOptions {
     cloudName: string
@@ -29,8 +29,9 @@ interface IRequest extends Request {
 
 interface JwtPayload {
     sub: string
-    role: Roles
+    role?: Roles
     status?: Status
+    deviceId: string
 }
 
 interface JwtDecoded extends JwtPayload {
@@ -54,4 +55,16 @@ interface Fee {
 interface Avatar {
     id: number
     url: string
+}
+
+interface PushNotification {
+    title: string
+    body: string
+    userId?: string
+}
+
+interface EmailAttachment {
+    content: string
+    mimeType: string
+    name: string
 }

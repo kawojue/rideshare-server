@@ -16,11 +16,11 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets'
 import { Role } from '@prisma/client'
+import { Utils } from 'helpers/utils'
 import { JwtService } from '@nestjs/jwt'
 import { Server, Socket } from 'socket.io'
 import { StatusCodes } from 'enums/statusCodes'
 import { RealtimeService } from './realtime.service'
-import { formatDuration } from 'helpers/transformer'
 import { PrismaService } from 'prisma/prisma.service'
 import { PaginationBaseDTO } from 'src/app/dto/pagination.dto'
 
@@ -799,7 +799,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayInit, OnGa
       const logsWithDuration = logs.map(log => {
         const durationInSeconds = log.startTime && log.endTime ? (log.endTime.getTime() - log.startTime.getTime()) / 1000 : null
 
-        const formattedDuration = formatDuration(durationInSeconds)
+        const formattedDuration = Utils.formatDuration(durationInSeconds)
 
         return { ...log, duration: formattedDuration }
       })

@@ -25,7 +25,7 @@ import { Response } from 'express'
 import { Role } from '@prisma/client'
 import { Roles } from 'src/jwt/role.decorator'
 import { DriverService } from './driver.service'
-import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
+import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { UpdateVehicleDTO, VehicleDTO } from './dto/vehicle.dto'
 

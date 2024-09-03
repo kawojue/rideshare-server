@@ -1,115 +1,422 @@
 import {
-    OTPDTO,
-    EmailDTO,
     SigninDTO,
-    SignupDTO,
-    ResetPasswordDTO,
-    UpdatePasswordDTO,
+    OnboardingDTO,
+    VerifySigninDTO,
+    GoogleSigninDTO,
     BiometricLoginDTO,
     EmergencyContactDTO,
 } from './dto/auth.dto'
-import { v4 as uuidv4 } from 'uuid'
-import { User } from '@prisma/client'
+import {
+    Injectable,
+    HttpException,
+    NotFoundException,
+    ForbiddenException,
+    BadRequestException,
+    UnauthorizedException
+} from '@nestjs/common'
+import { Request, Response } from 'express'
+import { Utils } from 'helpers/utils'
+import { UAParser } from 'ua-parser-js'
 import { JwtService } from '@nestjs/jwt'
 import { validateFile } from 'utils/file'
-import { Request, Response } from 'express'
+import { config } from 'configs/env.config'
+import {
+    CreateSmsNotificationEvent,
+    CreateEmailNotificationEvent,
+} from 'src/notification/notification.event'
 import { MiscService } from 'libs/misc.service'
-import { StatusCodes } from 'enums/statusCodes'
-import { PlunkService } from 'libs/plunk.service'
+import { OAuth2Client } from 'google-auth-library'
 import { PrismaService } from 'prisma/prisma.service'
-import { ResponseService } from 'libs/response.service'
-import { EncryptionService } from 'libs/encryption.service'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
-import { generateOTP, normalizePhoneNumber } from 'helpers/generators'
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { DaysToMilli } from 'enums/base'
+
+const isEmail = require('is-email')
 
 @Injectable()
 export class AuthService {
+    private client: OAuth2Client
+
     constructor(
         private readonly misc: MiscService,
-        private readonly plunk: PlunkService,
+        private readonly event: EventEmitter2,
         private readonly prisma: PrismaService,
         private readonly jwtService: JwtService,
-        private readonly response: ResponseService,
-        private readonly encryption: EncryptionService,
         private readonly cloudinary: CloudinaryService,
-    ) { }
-
-    private readonly isProd = process.env.NODE_ENV === "production"
-
-    async updateLoginState(
-        res: Response,
-        payload: JwtPayload,
-        key: 'lastUsedCredentialAt' | 'lastUsedBiometricAt'
     ) {
-        const access_token = await this.misc.generateAccessToken(payload)
-        const refresh_token = await this.misc.generateRefreshToken(payload)
-
-        await this.prisma.user.update({
-            where: { id: payload.sub },
-            data: {
-                refresh_token,
-                [key]: new Date(),
-                lastLoggedInAt: new Date(),
-            }
-        })
-
-        res.cookie('refresh_token', refresh_token, {
-            httpOnly: true,
-            sameSite: this.isProd ? 'none' : 'lax',
-            secure: this.isProd,
-            maxAge: 60 * 60 * 24 * 60 * 1000,
-        })
-
-        return access_token
+        this.client = new OAuth2Client()
     }
 
-    private async resendOtp(user: User) {
-        const { totp, totp_expiry } = generateOTP(6)
+    private async mobileDevice(req: Request, userId: string, deviceId: string, notificationToken?: string) {
+        const parser = new UAParser(req.headers['user-agent']).getResult()
 
-        const otp = await this.prisma.totp.findUnique({
-            where: { userId: user.id },
+        const os = parser.os.name
+        const type = parser.device.type
+        const model = parser.device.model
+        const vendor = parser.device.vendor
+
+        return this.prisma.mobileDevice.upsert({
+            where: {
+                userId_deviceId: { userId, deviceId },
+            },
+            create: {
+                os, model, type, vendor,
+                lastLoggedInAt: new Date(),
+                notificationToken, deviceId,
+                user: { connect: { id: userId } },
+            },
+            update: {
+                os, model, type, vendor,
+                lastLoggedInAt: new Date(),
+                notificationToken, deviceId,
+            }
+        })
+    }
+
+    private async updateCache(refresh_token: string, userId: string) {
+        await this.prisma.cache.upsert({
+            where: { key: `token_${userId}`, userId: userId },
+            create: {
+                refresh_token,
+                type: 'TOKEN_REFRESHER',
+                key: `token_${userId}`,
+            },
+            update: { refresh_token }
+        })
+    }
+
+    async setCookie(res: Response, data: Record<string, any>) {
+        res.cookie('access_token', data.access_token, {
+            sameSite: config.isProd ? 'none' : 'lax',
+            secure: config.isProd,
+            maxAge: DaysToMilli['1d']
         })
 
-        const expired = otp ? new Date() > otp.totp_expiry : false
+        res.cookie('refresh_token', data.refresh_token, {
+            httpOnly: true,
+            sameSite: config.isProd ? 'none' : 'lax',
+            secure: config.isProd,
+            maxAge: DaysToMilli['120d']
+        })
+    }
 
-        if ((!expired && !otp) || (expired && otp)) {
-            await Promise.all([
-                this.prisma.totp.upsert({
-                    where: { userId: user.id },
-                    create: {
-                        totp, totp_expiry,
-                        user: { connect: { id: user.id } },
+    async verifyGoogleSignin(req: Request, { idToken, ...device }: GoogleSigninDTO) {
+        const parser = new UAParser(req.headers['user-agent']).getResult()
+        const os = parser.os.name.toLowerCase()
+
+        try {
+            const tk = await this.client.verifyIdToken({
+                idToken,
+                audience: os === "android" ? config.google.clientId.android : config.google.clientId.ios
+            })
+            const payload = tk.getPayload()
+
+            const user = await this.prisma.user.findFirst({
+                where: {
+                    OR: [
+                        { email: payload.email },
+                        { providerId: payload.sub }
+                    ]
+                },
+                select: {
+                    id: true,
+                    role: true,
+                    email: true,
+                    phone: true,
+                    status: true,
+                    profile: {
+                        select: {
+                            avatar: true,
+                            biometric: true,
+                        }
                     },
-                    update: { totp, totp_expiry }
-                }),
-                this.isProd ? this.plunk.sendPlunkEmail({
-                    to: user.email,
-                    subject: 'Verify your email',
-                    body: `otp : ${totp}`
-                }) : (() => {
-                    console.log(totp)
-                })()
+                    wallet: {
+                        select: { balance: true }
+                    }
+                }
+            })
+
+            if (!user) {
+                throw new NotFoundException("Account with this email does not exist")
+            }
+
+            if (user && user.status === "SUSPENDED") {
+                throw new ForbiddenException("Account suspended. Contact Support!")
+            }
+
+            const mobileDevice = await this.mobileDevice(req, user.id, device.deviceId, device?.notificationToken)
+
+            const jwtPayload = {
+                sub: user.id,
+                role: user.role,
+                status: user.status,
+                deviceId: mobileDevice.deviceId
+            }
+
+            const [access_token, refresh_token] = await Promise.all([
+                this.misc.generateAccessToken(jwtPayload),
+                this.misc.generateRefreshToken(jwtPayload)
             ])
-            // TODO: Email template
+
+            await this.updateCache(refresh_token, user.id)
+
+            const setup = await this.prisma.profileSetup(user.id)
+
+            return {
+                user,
+                setup,
+                access_token,
+                refresh_token,
+                nextAction: 'DASHBOARD',
+            }
+        } catch (error) {
+            throw new UnauthorizedException('Invalid Google ID token')
         }
     }
 
-    async googleSignin(profile: any) {
-        const { email, proverId } = profile.user
+    async sendOtp({ identifier }: SigninDTO) {
+        const isPhone = !isEmail(identifier)
+        const { totp, totp_expiry } = Utils.generateOTP(4)
 
-        const user = await this.prisma.user.findFirst({
+        if (isPhone) {
+            Utils.normalizePhoneNumber(identifier)
+        }
+
+        let user = await this.prisma.user.findFirst({
             where: {
                 OR: [
-                    { email: { equals: email, mode: 'insensitive' } },
-                    { provider_id: { equals: proverId, mode: 'insensitive' } },
+                    { email: identifier },
+                    { phone: identifier },
                 ]
+            }
+        })
+
+        if (user && user.status === 'SUSPENDED') {
+            throw new ForbiddenException("Account suspended. Contact Support!")
+        }
+
+        let emitted: boolean
+
+        if (isPhone) {
+            emitted = this.event.emit(
+                'notification.sms',
+                new CreateSmsNotificationEvent({
+                    phone: identifier,
+                    message: `OTP Code <${totp}>. Rideshare`
+                })
+            )
+        }
+
+        if (!isPhone) {
+            emitted = this.event.emit(
+                'notification.email',
+                new CreateEmailNotificationEvent({
+                    emails: identifier,
+                    subject: user ? 'Login Verification' : 'Verify your Email',
+                    template: user ? 'SigninVerification' : 'EmailVerification'
+                })
+            )
+        }
+
+        if (emitted) {
+            await this.prisma.totp.upsert({
+                where: { key: identifier },
+                create: {
+                    totp,
+                    max: 3,
+                    counter: 0,
+                    totp_expiry,
+                    key: identifier,
+                },
+                update: { totp, totp_expiry }
+            })
+        }
+
+        return {
+            identifier,
+            nextAction: 'OTP-VERIFICATION',
+            type: isPhone ? 'PHONE' : 'EMAIl'
+        }
+    }
+
+    async verifySignin(req: Request, { otp, identifier, ...device }: VerifySigninDTO) {
+        let verified: boolean
+        const isPhone = !isEmail(identifier)
+
+        let nextAction = 'DASHBOARD'
+
+        let phoneData: any
+
+        if (isPhone) {
+            const { countryCode, regionCode, significant } = Utils.normalizePhoneNumber(identifier)
+
+            phoneData = { countryCode, regionCode, significant }
+            // Verification
+        }
+
+        if (!isPhone) {
+            const totp = await this.prisma.totp.findUnique({
+                where: { key: identifier }
+            })
+
+            if (!totp) {
+                throw new UnauthorizedException("Invalid OTP")
+            }
+
+            if (new Date() > totp.totp_expiry) {
+                await this.prisma.totp.delete({
+                    where: { key: identifier }
+                })
+                throw new ForbiddenException("Code has expired")
+            }
+
+            if (otp !== totp.totp) {
+                const throttler = await this.prisma.totp.update({
+                    where: { key: identifier },
+                    data: {
+                        counter: { increment: 1 }
+                    }
+                })
+
+                if (throttler.counter >= totp.max) {
+                    await this.prisma.totp.delete({
+                        where: { key: identifier },
+                    })
+                    throw new UnauthorizedException("Incorrect OTP. Max Retries reached.")
+                }
+
+                throw new UnauthorizedException("Incorrect OTP")
+            }
+
+            verified = true
+        }
+
+        if (verified) {
+            let user = await this.prisma.user.findFirst({
+                where: {
+                    OR: [
+                        { email: identifier },
+                        { phone: identifier },
+                    ]
+                }
+            })
+
+            if (!user) {
+                nextAction = 'ONBOARDING'
+                user = await this.prisma.user.create({
+                    data: isPhone ? {
+                        ...phoneData,
+                        phone: `${phoneData.countryCode}${phoneData.significant}`,
+                    } : { email: identifier },
+                })
+            }
+
+            if (user) {
+                const mobileDevice = await this.mobileDevice(req, user.id, device.deviceId, device?.notificationToken)
+
+                const payload = {
+                    sub: user.id,
+                    role: user.role,
+                    status: user.status,
+                    deviceId: mobileDevice.deviceId
+                }
+
+                const [access_token, refresh_token] = await Promise.all([
+                    this.misc.generateAccessToken(payload),
+                    this.misc.generateRefreshToken(payload)
+                ])
+
+                await this.updateCache(refresh_token, user.id)
+
+                return { access_token, refresh_token, nextAction }
+            }
+        } else {
+            throw new UnauthorizedException("Verification Unsuccessful")
+        }
+    }
+
+    async onboarding(
+        { sub }: JwtDecoded,
+        {
+            gender, lastname, middlename,
+            address, as, email, firstname,
+        }: OnboardingDTO
+    ) {
+        const user = await this.prisma.user.update({
+            where: { id: sub },
+            data: {
+                firstname, lastname,
+                role: as, email, middlename,
+                wallet: { create: { balance: 0 } },
+                profile: { create: { gender, address } },
             },
             include: {
+                wallet: {
+                    select: { balance: true }
+                },
                 profile: {
                     select: {
                         avatar: true,
-                        gender: true,
+                        biometric: true,
+                    }
+                }
+            }
+        })
+
+        const mobileDevice = await this.prisma.mobileDevice.findFirst({
+            where: { userId: sub },
+            orderBy: { lastLoggedInAt: 'desc' }
+        })
+
+        const payload = {
+            status: user.status,
+            sub, role: user.role,
+            deviceId: mobileDevice.deviceId
+        }
+
+        const [access_token, refresh_token] = await Promise.all([
+            this.misc.generateAccessToken(payload),
+            this.misc.generateRefreshToken(payload)
+        ])
+
+        await this.updateCache(refresh_token, sub)
+
+        return {
+            user,
+            access_token,
+            refresh_token,
+            nextAction: 'DASHBOARD',
+        }
+    }
+
+    async biometricSignin({ access_token: accessToken }: BiometricLoginDTO) {
+        let decoded: JwtDecoded
+        try {
+            decoded = await this.jwtService.verifyAsync(accessToken, {
+                secret: config.jwt.secret,
+                ignoreExpiration: true,
+            })
+        } catch (err) {
+            throw new UnauthorizedException("Invalid token")
+        }
+
+        Utils.sanitizeData<JwtDecoded>(decoded, ['exp', 'iat'])
+
+        const check = await this.prisma.biometricCheck(decoded)
+
+        if (!check.isAbleToUseBiometric) {
+            throw new UnauthorizedException("Verification is required")
+        }
+
+        const user = await this.prisma.user.findUnique({
+            where: { id: decoded.sub },
+            include: {
+                wallet: {
+                    select: { balance: true }
+                },
+                profile: {
+                    select: {
+                        avatar: true,
                         biometric: true,
                     }
                 }
@@ -120,507 +427,103 @@ export class AuthService {
             throw new NotFoundException("Account not found")
         }
 
+        if (user && user.status === "SUSPENDED") {
+            throw new ForbiddenException("Account suspended. Contact Support!")
+        }
+
+        const access_token = await this.misc.generateAccessToken(decoded)
+
+        Utils.sanitizeData<typeof user>(user, ['providerId', 'lastUsedBiometricAt'])
+
+        return { access_token, user }
+    }
+
+    async refreshAccessToken(req: Request) {
+        const refreshToken = req.cookies.refresh_token
+
+        const cache = await this.prisma.cache.findFirst({
+            where: {
+                refresh_token: refreshToken
+            }
+        })
+
+        if (!refreshToken || !cache) {
+            throw new ForbiddenException()
+        }
+
+        const newAccessToken = await this.misc.generateNewAccessToken(refreshToken)
+
+        return { access_token: newAccessToken }
+    }
+
+    async uploadAvatar(file: Express.Multer.File, { sub: userId }: JwtDecoded) {
+        if (!file) {
+            throw new BadRequestException('No file was selected')
+        }
+
+        const profile = await this.prisma.getProfile(userId)
+
+        const validate = validateFile(file, 5 << 20, 'jpeg', 'jpg', 'png')
+        if (validate?.status) {
+            throw new HttpException(validate.message, validate.status)
+        }
+
+        const response = await this.cloudinary.upload(validate.file, {
+            folder: 'Rideshare/Profile',
+            resource_type: 'image'
+        })
+
         const payload = {
-            sub: user.id,
-            role: user.role,
-            status: user.status
-        } as JwtPayload
+            size: file.size,
+            type: file.mimetype,
+            url: response.secure_url,
+            public_id: response.public_id,
+        }
 
         await this.prisma.profile.update({
-            where: { userId: user.id, email_verified: false },
-            data: { email_verified: true }
+            where: { id: profile.id },
+            data: { avatar: payload }
         })
 
-        const setup = await this.prisma.profileSetup(user.id)
+        const avatar = profile.avatar as any
+        if (avatar?.public_id) {
+            await this.cloudinary.delete(avatar.public_id)
+        }
 
-        return { payload, setup, user }
+        return payload
     }
 
-    async signin(res: Response, { identifier, password }: SigninDTO) {
-        let email = identifier.includes('@') ? identifier : ''
-        let phone = email ? '' : normalizePhoneNumber(identifier)
-
-        const user = await this.prisma.user.findFirst({
-            where: {
-                OR: [
-                    { email: { equals: email, mode: 'insensitive' } },
-                    { phone: { equals: phone, mode: 'insensitive' } },
-                ]
-            },
-            include: {
-                profile: {
-                    select: {
-                        avatar: true,
-                        gender: true,
-                        biometric: true,
-                        email_verified: true,
-                    }
-                }
-            }
-        })
-
-        if (!user) {
-            return this.response.sendError(res, StatusCodes.NotFound, "Account not found")
-        }
-
-        if (user.provider === "Google") {
-            return this.response.sendError(res, StatusCodes.BadRequest, "Login with Google Provider")
-        }
-
-        const isMatch = await this.encryption.compare(password, user.password)
-        if (!isMatch) {
-            return this.response.sendError(res, StatusCodes.Unauthorized, "Incorrect password")
-        }
-
-        const payload = {
-            sub: user.id,
-            role: user.role,
-            status: user.status
-        } as JwtPayload
-
-        const access_token = await this.updateLoginState(res, payload, 'lastUsedCredentialAt')
-
-        const setup = await this.prisma.profileSetup(user.id)
-
-        this.response.sendSuccess(res, StatusCodes.OK, {
-            access_token,
-            data: {
-                setup,
-                id: user.id,
-                role: user.role,
-                profile: user.profile,
-                lastname: user.lastname,
-                firsname: user.firstname,
-            }
-        })
-
-        res.on('finish', async () => {
-            if (!user.profile.email_verified) {
-                await this.resendOtp(user)
-            }
-        })
-    }
-
-    async biometricSignin(res: Response, { access_token: accessToken }: BiometricLoginDTO) {
-        let decoded: JwtDecoded
-
-        try {
-            decoded = await this.jwtService.verifyAsync(accessToken, {
-                secret: process.env.JWT_SECRET!,
-                ignoreExpiration: true,
-            })
-        } catch (err) {
-            throw new UnauthorizedException("Invalid token")
-        }
-
-        if (!decoded?.sub) {
-            return this.response.sendError(res, StatusCodes.Forbidden, "Invalid token")
-        }
-
-        const user = await this.prisma.user.findUnique({
-            where: { id: decoded.sub },
-            include: {
-                profile: {
-                    select: {
-                        avatar: true,
-                        gender: true,
-                        biometric: true,
-                        email_verified: true,
-                    }
-                }
-            }
-        })
-
-        if (!user) {
-            return this.response.sendError(res, StatusCodes.NotFound, "Account not found")
-        }
-
-        const checkings = await this.prisma.biometricCheck(decoded)
-
-        if (!checkings.isAbleToUseBiometric) {
-            return this.response.sendError(res, StatusCodes.Unauthorized, checkings.reason)
-        }
-
-        const payload = {
-            sub: user.id,
-            role: user.role,
-            status: user.status,
-        } as JwtPayload
-
-        const access_token = await this.updateLoginState(res, payload, 'lastUsedBiometricAt')
-
-        const setup = await this.prisma.profileSetup(user.id)
-
-        this.response.sendSuccess(res, StatusCodes.OK, {
-            access_token,
-            data: {
-                setup,
-                id: user.id,
-                role: user.role,
-                profile: user.profile,
-                firstname: user.firstname,
-            }
-        })
-
-        res.on('finish', async () => {
-            if (!user.profile.email_verified) {
-                await this.resendOtp(user)
-            }
-        })
-    }
-
-    async signup(res: Response, {
-        gender, firstname, lastname, middlename,
-        as, email, password, phone, address,
-    }: SignupDTO) {
-        phone = normalizePhoneNumber(phone)
-
-        const findByEmailOrPhone = await this.prisma.user.findFirst({
-            where: {
-                OR: [
-                    { phone: { equals: phone, mode: 'insensitive' } },
-                    { email: { equals: email, mode: 'insensitive' } },
-                ]
-            }
-        })
-
-        if (findByEmailOrPhone) {
-            return this.response.sendError(res, StatusCodes.Conflict, "There is an account associated with either the email or phone number")
-        }
-
-        password = await this.encryption.hash(password)
-
-        const _id = uuidv4()
-
-        const [user] = await this.prisma.$transaction([
-            this.prisma.user.create({
-                data: {
-                    id: _id, provider: 'Local',
-                    firstname, lastname, middlename,
-                    email, phone, role: as, password,
-                    profile: { create: { gender, address } },
-                }
-            }),
-            this.prisma.wallet.create({
-                data: { user: { connect: { id: _id } } }
-            })
-        ])
-
-        if (as === "DRIVER" && user) {
-            await this.prisma.verification.create({
-                data: { driver: { connect: { id: _id } } }
-            })
-        }
-
-        res.on('finish', async () => {
-            if (user) {
-                await this.resendOtp(user)
-            }
-        })
-
-        this.response.sendSuccess(res, StatusCodes.Created, {
-            message: "Successful. Verify your email"
-        })
-    }
-
-    async refreshAccessToken(req: Request, res: Response) {
-        try {
-            const refreshToken = req.cookies.refresh_token
-
-            if (!refreshToken) {
-                return this.response.sendError(res, StatusCodes.BadRequest, "Refresh token not found")
-            }
-
-            const newAccessToken = await this.misc.generateNewAccessToken(refreshToken)
-
-            this.response.sendSuccess(res, StatusCodes.OK, {
-                access_token: newAccessToken
-            })
-        } catch (err) {
-            return this.response.sendError(res, StatusCodes.Unauthorized, "Invalid refresh token")
-        }
-    }
-
-    async verifyOtp(res: Response, { otp }: OTPDTO) {
-        try {
-            const totp = await this.prisma.totp.findFirst({
-                where: { totp: otp }
-            })
-
-            if (!totp || !totp.totp_expiry) {
-                return this.response.sendError(res, StatusCodes.Unauthorized, "Incorrect OTP")
-            }
-
-            if (new Date() > new Date(totp.totp_expiry)) {
-                this.response.sendError(res, StatusCodes.Forbidden, "OTP has expired")
-                await this.prisma.totp.deleteMany({
-                    where: { userId: totp.userId },
-                })
-
-                return
-            }
-
-            await this.prisma.$transaction([
-                this.prisma.profile.update({
-                    where: { userId: totp.userId },
-                    data: { email_verified: true }
-                }),
-                this.prisma.totp.delete({
-                    where: { userId: totp.userId }
-                })
-            ])
-
-            this.response.sendSuccess(res, StatusCodes.OK, {
-                verified: true,
-                message: "Successful",
-            })
-        } catch (err) {
-            this.misc.handleServerError(res, err, "Something went wrong")
-        }
-    }
-
-    async requestOtp(res: Response, { email }: EmailDTO) {
-        try {
-            let mail: boolean = false
-            let eligible: boolean = false
-
-            const user = await this.prisma.user.findUnique({
-                where: { email }
-            })
-
-            if (!user) {
-                return this.response.sendError(res, StatusCodes.NotFound, "Account does not exist")
-            }
-
-            const totp = await this.prisma.totp.findFirst({
-                where: { userId: user.id }
-            })
-
-            const otp = generateOTP(6)
-
-            if (totp) {
-                if (!totp.totp_expiry) {
-                    mail = true
-                    eligible = true
-                } else {
-                    const currentTime = new Date().getTime()
-                    const totp_expiry = new Date(totp.totp_expiry).getTime()
-
-                    const OTP_EXPIRY_THRESHOLD = 2 as const
-                    const remainingMinutes = ((totp_expiry - currentTime) / 1000) / 60
-
-                    if (remainingMinutes < OTP_EXPIRY_THRESHOLD) {
-                        mail = true
-                        eligible = true
-                    } else {
-                        return this.response.sendError(res, StatusCodes.Unauthorized, `Request after ${Math.floor(remainingMinutes)} minutues`)
-                    }
-                }
-            } else {
-                mail = true
-            }
-
-            res.on('finish', async () => {
-                if (mail || eligible) {
-                    await Promise.all([
-                        this.plunk.sendPlunkEmail({
-                            to: user.email,
-                            subject: "Verification",
-                            body: `Otp: ${otp.totp}`
-                        }),
-                        this.isProd ? this.prisma.totp.upsert({
-                            where: { userId: user.id },
-                            create: {
-                                totp: otp.totp,
-                                totp_expiry: otp.totp_expiry,
-                                user: { connect: { id: user.id } }
-                            },
-                            update: {
-                                totp: otp.totp,
-                                totp_expiry: otp.totp_expiry,
-                            }
-                        }) : (() => {
-                            console.log(otp.totp)
-                        })()
-                    ])
-                    // TODO: Email template
-                }
-            })
-
-            this.response.sendSuccess(res, StatusCodes.OK, {
-                message: "New OTP has been sent to your email"
-            })
-        } catch (err) {
-            this.misc.handleServerError(res, err, "Sorry, there is a problem on our end")
-        }
-    }
-
-    async updatePassword(
-        res: Response,
-        { sub: userId }: ExpressUser,
-        { oldPassword, password1, password2 }: UpdatePasswordDTO
-    ) {
-        try {
-            const user = await this.prisma.user.findUnique({
-                where: { id: userId }
-            })
-
-            const verifyPassword = await this.encryption.compare(oldPassword, user.password)
-
-            if (!verifyPassword) {
-                return this.response.sendError(res, StatusCodes.Unauthorized, "Incorrect password")
-            }
-
-            if (password1 !== password2) {
-                return this.response.sendError(res, StatusCodes.BadRequest, "Passwords do not match")
-            }
-
-            const password = await this.encryption.hash(password1)
-
-            await this.prisma.user.update({
-                where: { id: userId },
-                data: { password, lastPasswordChanged: new Date() }
-            })
-
-            this.response.sendSuccess(res, StatusCodes.OK, {
-                message: "Password has been updated successfully"
-            })
-        } catch (err) {
-            this.misc.handleServerError(res, err, "Error updating password")
-        }
-    }
-
-    async resetPassword(res: Response, { otp, newPassword, email }: ResetPasswordDTO) {
-        try {
-            const user = await this.prisma.user.findUnique({
-                where: { email },
-                include: { totp: true }
-            })
-
-            if (!user || user.status === "SUSPENDED") {
-                return this.response.sendError(res, StatusCodes.NotFound, "Account suspended")
-            }
-
-            const totp = await this.prisma.totp.findFirst({
-                where: { totp: otp }
-            })
-
-            if ((!totp || !totp.totp_expiry) || (user.totp.totp !== totp.totp)) {
-                return this.response.sendError(res, StatusCodes.Unauthorized, 'Invalid OTP')
-            }
-
-            const currentTime = new Date()
-            const otp_expiry = totp.totp_expiry
-
-            if (currentTime > otp_expiry) {
-                this.response.sendError(res, StatusCodes.Forbidden, "OTP has expired")
-                await this.prisma.totp.delete({
-                    where: { id: totp.id },
-                })
-
-                return
-            }
-
-            const hashedPassword = await this.encryption.hash(newPassword)
-
-            await this.prisma.$transaction([
-                this.prisma.user.update({
-                    where: { id: totp.userId },
-                    data: {
-                        password: hashedPassword,
-                        lastPasswordChanged: new Date(),
-                    }
-                }),
-                this.prisma.profile.update({
-                    where: { userId: totp.userId },
-                    data: { email_verified: true }
-                }),
-                this.prisma.totp.delete({
-                    where: { userId: totp.userId }
-                })
-            ])
-
-            this.response.sendSuccess(res, StatusCodes.OK, {
-                message: "Password reseted successfully"
-            })
-        } catch (err) {
-            this.misc.handleServerError(res, err, "Reset password failed")
-        }
-    }
-
-    async uploadAvatar(
-        res: Response,
-        file: Express.Multer.File,
-        { sub: userId }: ExpressUser,
-    ) {
-        try {
-            if (!file) {
-                return this.response.sendError(res, StatusCodes.BadRequest, 'No file was selected')
-            }
-
-            const profile = await this.prisma.getProfile(userId)
-
-            const validate = validateFile(file, 5 << 20, 'jpeg', 'jpg', 'png')
-            if (validate?.status) {
-                return this.response.sendError(res, validate.status, validate.message)
-            }
-
-            const response = await this.cloudinary.upload(validate.file, {
-                folder: 'RideShare/Profile',
-                resource_type: 'image'
-            })
-
-            const payload = {
-                size: file.size,
-                type: file.mimetype,
-                url: response.secure_url,
-                public_id: response.public_id,
-            }
-
-            await this.prisma.profile.update({
-                where: { id: profile.id },
-                data: { avatar: payload }
-            })
-
-            const avatar = profile.avatar as any
-            if (avatar?.public_id) {
-                await this.cloudinary.delete(avatar.public_id)
-            }
-
-            this.response.sendSuccess(res, StatusCodes.OK, { data: payload })
-        } catch (err) {
-            this.misc.handleServerError(res, err)
-        }
-    }
-
-    async toggleBiometric(res: Response, { sub }: ExpressUser) {
+    async toggleBiometric({ sub }: JwtDecoded) {
         const profile = await this.prisma.getProfile(sub)
 
         const newProfile = await this.prisma.profile.update({
             where: { userId: sub },
             data: { biometric: !profile.biometric },
-            select: { biometric: true }
         })
 
-        this.response.sendSuccess(res, StatusCodes.OK, { data: newProfile })
+        return { profile: newProfile }
     }
 
-    async emergencyContact(
-        res: Response,
-        { sub: userId }: ExpressUser,
-        { name, phone }: EmergencyContactDTO
-    ) {
-        const profile = await this.prisma.getProfile(userId)
+    async emergencyContact({ sub }: JwtDecoded, { fullname, phone, address, email }: EmergencyContactDTO) {
+        if (!phone && !email) {
+            throw new BadRequestException("Phone number or email is required")
+        }
+
+        if (phone) {
+            Utils.normalizePhoneNumber(phone)
+        }
+
+        const { id } = await this.prisma.getProfile(sub)
 
         const contact = await this.prisma.emergencyContact.upsert({
-            where: { profileId: profile.id },
+            where: { profileId: id },
             create: {
-                name, phone,
-                profile: { connect: { id: profile.id } }
+                profile: { connect: { id } },
+                fullname, phone, address, email,
             },
-            update: { name, phone }
+            update: { fullname, phone, address, email }
         })
 
-        this.response.sendSuccess(res, StatusCodes.OK, { data: contact })
+        return contact
     }
 }

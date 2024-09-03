@@ -2,7 +2,6 @@ import {
     Injectable,
     OnModuleInit,
     OnModuleDestroy,
-    NotFoundException,
 } from '@nestjs/common'
 import { PrismaClient } from '@prisma/client'
 
@@ -18,52 +17,26 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     async biometricCheck(decoded: any) {
         const userId = decoded.sub
-
-        const user = await this.user.findUnique({
-            where: { id: userId },
-            select: {
-                lastLoggedInAt: true,
-                lastUsedBiometricAt: true,
-                lastPasswordChanged: true,
-                lastUsedCredentialAt: true,
-            }
-        })
+        const deviceId = decoded.deviceId
 
         const profile = await this.getProfile(userId)
 
-        if (!user || !profile) {
-            throw new NotFoundException('Profile not found')
-        }
-
-        if (!profile.biometric) {
+        if (profile && !profile.biometric) {
             return {
                 isAbleToUseBiometric: false,
-                reason: "Biometric is not activated"
+                reason: 'Biometric is not turned on'
             }
         }
 
-        if ((new Date(user.lastLoggedInAt).getTime() / 1000) > decoded.exp) {
+        const device = await this.mobileDevice.findFirst({
+            where: { userId: userId }
+        })
+
+        if (device.deviceId !== deviceId) {
             return {
                 isAbleToUseBiometric: false,
-                reason: "Invalid Token"
+                reason: 'Verification is required'
             }
-        }
-
-        const { lastUsedCredentialAt, lastPasswordChanged, lastUsedBiometricAt } = user
-
-        if (!lastUsedBiometricAt) {
-            return { isAbleToUseBiometric: true }
-        }
-
-        if (lastPasswordChanged > lastUsedBiometricAt && lastUsedCredentialAt <= lastUsedBiometricAt) {
-            return {
-                isAbleToUseBiometric: false,
-                reason: 'Password required due to recent password change.'
-            }
-        }
-
-        if (lastUsedCredentialAt > lastUsedBiometricAt) {
-            return { isAbleToUseBiometric: true }
         }
 
         return { isAbleToUseBiometric: true }

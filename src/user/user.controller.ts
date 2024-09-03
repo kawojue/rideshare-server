@@ -15,7 +15,7 @@ import { Role } from '@prisma/client'
 import { UserService } from './user.service'
 import { Roles } from 'src/jwt/role.decorator'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
-import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
+import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
 import { FetchRatingAndReviewsDTO, RatingDTO } from './dto/rate.dto'
 import { FetchTxHistoryDTO, FetchUsersDTO } from 'src/app/dto/pagination.dto'
 

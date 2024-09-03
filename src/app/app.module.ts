@@ -1,33 +1,58 @@
+import { Module } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { AppService } from './app.service'
+import { HttpModule } from '@nestjs/axios'
+import { config } from 'configs/env.config'
 import { ConfigModule } from '@nestjs/config'
+import { ApiModule } from 'src/api/api.module'
 import { MiscService } from 'libs/misc.service'
-import { AuthModule } from '../auth/auth.module'
-import { UserModule } from '../user/user.module'
 import { AppController } from './app.controller'
+import { AuthModule } from 'src/auth/auth.module'
+import { UserModule } from 'src/user/user.module'
 import { PrismaService } from 'prisma/prisma.service'
-import { DriverModule } from '../driver/driver.module'
-import { WalletModule } from '../wallet/wallet.module'
-import { ModminModule } from '../modmin/modmin.module'
+import { MailerModule } from '@nestjs-modules/mailer'
+import { DriverModule } from 'src/driver/driver.module'
+import { WalletModule } from 'src/wallet/wallet.module'
+import { ModminModule } from 'src/modmin/modmin.module'
 import { ResponseService } from 'libs/response.service'
-import { RealtimeModule } from '../realtime/realtime.module'
-import cloudinaryConfig from '../cloudinary/cloudinary.config'
+import { EventEmitterModule } from '@nestjs/event-emitter'
+import { RealtimeModule } from 'src/realtime/realtime.module'
+import cloudinaryConfig from 'src/cloudinary/cloudinary.config'
 import { AnalyticsModule } from 'src/analytics/analytics.module'
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common'
-import { RateLimiterMiddleware } from '../middlewares/rate-limit.middleware'
+import { NotificationModule } from 'src/notification/notification.module'
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      load: [cloudinaryConfig],
-    }),
+    ApiModule,
     AuthModule,
     UserModule,
+    HttpModule,
     DriverModule,
     WalletModule,
     ModminModule,
     RealtimeModule,
     AnalyticsModule,
+    NotificationModule,
+    ConfigModule.forRoot({
+      load: [cloudinaryConfig],
+    }),
+    MailerModule.forRoot({
+      transport: {
+        host: 'smtp.gmail.com',
+        // port: 587, // 465
+        secure: true,
+        service: 'gmail',
+        requireTLS: true,
+        auth: {
+          user: config.google.email,
+          pass: config.google.emailPassword,
+        },
+      },
+      defaults: {
+        from: `No Reply`,
+      },
+    }),
+    EventEmitterModule.forRoot({ global: true })
   ],
   controllers: [AppController],
   providers: [
@@ -38,10 +63,4 @@ import { RateLimiterMiddleware } from '../middlewares/rate-limit.middleware'
     ResponseService,
   ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(RateLimiterMiddleware)
-      .forRoutes('*')
-  }
-}
+export class AppModule { }

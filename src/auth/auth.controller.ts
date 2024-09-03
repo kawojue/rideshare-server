@@ -1,10 +1,8 @@
 import {
-  OTPDTO,
-  EmailDTO,
   SigninDTO,
-  SignupDTO,
-  ResetPasswordDTO,
-  UpdatePasswordDTO,
+  OnboardingDTO,
+  GoogleSigninDTO,
+  VerifySigninDTO,
   BiometricLoginDTO,
   EmergencyContactDTO,
 } from './dto/auth.dto'
@@ -28,115 +26,98 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger'
 import { Role } from '@prisma/client'
+import { Utils } from 'helpers/utils'
 import { Request, Response } from 'express'
 import { AuthService } from './auth.service'
 import { Roles } from 'src/jwt/role.decorator'
-import { JwtRoleAuthGuard } from 'src/jwt/jwt-role.guard'
+import { StatusCodes } from 'enums/statusCodes'
+import { ResponseService } from 'libs/response.service'
+import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
+import { OnboardingGuard } from 'src/jwt/onboarding.guard'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { GoogleAuthGuard } from 'src/jwt/google-auth.guard'
+import { GetAuthParam } from 'src/jwt/auth-param.decorator'
 
 @ApiTags("Auth")
 @Controller('auth')
 export class AuthController {
-  private isProd: boolean
-
   constructor(
     private readonly authService: AuthService,
-  ) {
-    this.isProd = process.env.NODE_ENV === "production"
-  }
+    private readonly response: ResponseService,
+  ) { }
 
-  @ApiOperation({
-    summary: 'Use this - only for signin',
-  })
-  @Get('google')
-  @UseGuards(GoogleAuthGuard)
-  async googleAuth(@Req() req: Request) { }
+  @Post('/send-otp')
+  async sendOtp(@Res() res: Response, @Body() body: SigninDTO) {
+    const data = await this.authService.sendOtp(body)
 
-  @ApiOperation({
-    summary: 'Ignore this',
-  })
-  @Get('google/callback')
-  @UseGuards(GoogleAuthGuard)
-  async googleSignin(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const { payload, setup, user } = await this.authService.googleSignin(req.user)
-
-    const access_token = await this.authService.updateLoginState(res, payload, 'lastUsedCredentialAt')
-
-    const data = {
-      access_token,
-      data: {
-        setup,
-        id: user.id,
-        role: user.role,
-        profile: user.profile,
-        lastname: user.lastname,
-        firstname: user.firstname,
-      }
-    }
-
-    res.cookie('access_token', data.access_token, {
-      sameSite: this.isProd ? 'none' : 'lax',
-      secure: this.isProd,
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    })
-
-    res.redirect('http://localhost:3000')
+    return this.response.sendSuccess(res, StatusCodes.OK, { data })
   }
 
   @Post('/signin')
-  async signin(@Res() res: Response, @Body() body: SigninDTO) {
-    await this.authService.signin(res, body)
+  async signin(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body() body: VerifySigninDTO
+  ) {
+    const data = await this.authService.verifySignin(req, body)
+
+    await this.authService.setCookie(res, data)
+
+    Utils.sanitizeData<typeof data>(data, ['refresh_token'])
+    return this.response.sendSuccess(res, StatusCodes.Created, { data })
+  }
+
+  @Get('google/signin')
+  async googleSignin(
+    @Res() res: Response,
+    @Req() req: Request,
+    @Body() body: GoogleSigninDTO
+  ) {
+    const data = await this.authService.verifyGoogleSignin(req, body)
+
+    await this.authService.setCookie(res, data)
+
+    Utils.sanitizeData<typeof data>(data, ['refresh_token'])
+    return this.response.sendSuccess(res, StatusCodes.OK, { data })
   }
 
   @Post('/biometric/signin')
   async biometricSignin(@Res() res: Response, @Body() body: BiometricLoginDTO) {
-    await this.authService.biometricSignin(res, body)
+    const data = await this.authService.biometricSignin(body)
+
+    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+  }
+
+  @ApiBearerAuth()
+  @Post('/onboarding')
+  @UseGuards(OnboardingGuard)
+  async onboarding(
+    @Res() res: Response,
+    @Body() body: OnboardingDTO,
+    @GetAuthParam() auth: JwtDecoded,
+  ) {
+    const data = await this.authService.onboarding(auth, body)
+
+    await this.authService.setCookie(res, data)
+
+    Utils.sanitizeData<typeof data>(data, ['refresh_token'])
+    return this.response.sendSuccess(res, StatusCodes.OK, { data })
   }
 
   @ApiBearerAuth()
   @Patch('/biometric/toggle')
   @UseGuards(JwtRoleAuthGuard)
   @Roles(Role.DRIVER, Role.PASSENGER)
-  async toggleBiometric(@Res() res: Response, @Req() req: IRequest) {
-    await this.authService.toggleBiometric(res, req.user)
-  }
+  async toggleBiometric(@Res() res: Response, @GetAuthParam() auth: JwtDecoded) {
+    const { profile: data } = await this.authService.toggleBiometric(auth)
 
-  @Post('/signup')
-  async signup(@Res() res: Response, @Body() body: SignupDTO) {
-    await this.authService.signup(res, body)
+    return this.response.sendSuccess(res, StatusCodes.OK, { data })
   }
 
   @Post('/refresh/access-token')
   async refreshAccessToken(@Res() res: Response, @Req() req: Request) {
-    await this.authService.refreshAccessToken(req, res)
-  }
+    const data = await this.authService.refreshAccessToken(req)
 
-  @Post('/otp/request')
-  async requestOtp(@Res() res: Response, @Body() body: EmailDTO) {
-    await this.authService.requestOtp(res, body)
-  }
-
-  @Post('/otp/verify')
-  async verifyOtp(@Res() res: Response, @Body() body: OTPDTO) {
-    await this.authService.verifyOtp(res, body)
-  }
-
-  @ApiBearerAuth()
-  @Patch('/password/update')
-  @UseGuards(JwtRoleAuthGuard)
-  @Roles(Role.DRIVER, Role.PASSENGER)
-  async updatePassword(
-    @Req() req: IRequest,
-    @Res() res: Response,
-    @Body() body: UpdatePasswordDTO
-  ) {
-    await this.authService.updatePassword(res, req.user, body)
-  }
-
-  @Patch('/password/reset')
-  async resetPassword(@Res() res: Response, @Body() body: ResetPasswordDTO) {
-    await this.authService.resetPassword(res, body)
+    return this.response.sendSuccess(res, StatusCodes.OK, { data })
   }
 
   @ApiBearerAuth()
@@ -147,22 +128,26 @@ export class AuthController {
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiOperation({ summary: 'The form-data key should be avatar' })
   async uploadAvatar(
-    @Req() req: IRequest,
     @Res() res: Response,
+    @GetAuthParam() auth: JwtDecoded,
     @UploadedFile() file: Express.Multer.File
   ) {
-    await this.authService.uploadAvatar(res, file, req.user)
+    const payload = await this.authService.uploadAvatar(file, auth)
+
+    return this.response.sendSuccess(res, StatusCodes.OK, { data: payload })
   }
 
   @ApiBearerAuth()
-  @Put('/emergency-contact')
+  @Post('/emergency-contact')
   @UseGuards(JwtRoleAuthGuard)
   @Roles(Role.DRIVER, Role.PASSENGER)
   async emergencyContact(
-    @Req() req: IRequest,
     @Res() res: Response,
+    @GetAuthParam() auth: JwtDecoded,
     @Body() body: EmergencyContactDTO,
   ) {
-    await this.authService.emergencyContact(res, req.user, body)
+    const data = await this.authService.emergencyContact(auth, body)
+
+    return this.response.sendSuccess(res, StatusCodes.Created, { data })
   }
 }

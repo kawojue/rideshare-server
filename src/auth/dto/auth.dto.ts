@@ -1,4 +1,5 @@
 import { UserEnum } from 'enums/base'
+import { Utils } from 'helpers/utils'
 import { Gender } from '@prisma/client'
 import {
     IsEmail, IsEnum, IsNotEmpty, IsOptional,
@@ -6,70 +7,70 @@ import {
 } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
-import { normalizePhoneNumber } from 'helpers/generators'
-import { titleText, toLowerCase } from 'helpers/transformer'
 
 export class EmailDTO {
     @ApiProperty({ example: 'kawojue08@gmail.com' })
     @IsEmail()
     @IsNotEmpty()
-    @Transform(({ value }) => toLowerCase(value))
+    @Transform(({ value }) => Utils.toLowerCase(value))
     email: string
-}
-
-export class OTPDTO {
-    @ApiProperty({
-        example: '234517'
-    })
-    @IsString()
-    @Matches(/^\d{6}$/, {
-        message: 'OTP must be a 6-digit number'
-    })
-    otp: string
-}
-
-export class ResetPasswordDTO extends EmailDTO {
-    @ApiProperty({ example: '^MyPswd123' })
-    @IsString()
-    @IsNotEmpty()
-    @MinLength(6)
-    @MaxLength(42)
-    newPassword: string
-
-    @ApiProperty({
-        example: '234517'
-    })
-    @IsString()
-    @Matches(/^\d{6}$/, {
-        message: 'OTP must be a 6-digit number'
-    })
-    otp: string
 }
 
 export class SigninDTO {
     @ApiProperty({
-        example: '08131911964 / kawojue08@gmail.com'
+        example: '08131911964 / kawojue08@gmail.com',
+        description: 'This could be a phone number or email'
     })
     @IsString()
     @IsNotEmpty()
-    @Transform(({ value }) => toLowerCase(value))
+    @Transform(({ value }) => Utils.toLowerCase(value))
     identifier: string
-
-    @ApiProperty({ example: '^MyPswd123' })
-    @IsString()
-    @IsNotEmpty()
-    @MinLength(6)
-    @MaxLength(42)
-    password: string
 }
 
-export class SignupDTO extends EmailDTO {
+export class OTPDTO extends SigninDTO {
+    @ApiProperty({
+        example: '2347'
+    })
+    @IsString()
+    @Matches(/^\d{4}$/, {
+        message: 'OTP must be a 6-digit number'
+    })
+    otp: string
+}
+
+export class MobileDeviceDTO {
+    @ApiProperty({
+        example: 'qwertyazerkwa',
+        required: false
+    })
+    notificationToken?: string
+
+    @ApiProperty({
+        example: 'asdfglkjhg'
+    })
+    deviceId: string
+}
+
+export class VerifySigninDTO extends OTPDTO {
+    @ApiProperty({
+        example: 'qwertyazerkwa',
+        required: false
+    })
+    notificationToken?: string
+
+    @ApiProperty({
+        example: 'asdfglkjhg'
+    })
+    deviceId: string
+}
+
+export class OnboardingDTO extends EmailDTO {
     @ApiProperty({
         example: 'Raheem'
     })
     @IsString()
     @IsNotEmpty()
-    @Transform(({ value }) => titleText(value))
+    @Transform(({ value }) => Utils.titleText(value))
     firstname: string
 
     @ApiProperty({
@@ -77,16 +78,17 @@ export class SignupDTO extends EmailDTO {
     })
     @IsString()
     @IsNotEmpty()
-    @Transform(({ value }) => titleText(value))
+    @Transform(({ value }) => Utils.titleText(value))
     lastname: string
 
     @ApiProperty({
-        example: 'Muyiwa'
+        example: 'Muyiwa',
+        required: false,
     })
     @IsString()
     @IsNotEmpty()
     @IsOptional()
-    @Transform(({ value }) => titleText(value))
+    @Transform(({ value }) => Utils.titleText(value))
     middlename: string
 
     @ApiProperty({
@@ -97,20 +99,6 @@ export class SignupDTO extends EmailDTO {
     @IsEnum(UserEnum)
     as: UserEnum
 
-    @ApiProperty({ example: '^MyPswd123' })
-    @IsString()
-    @IsNotEmpty()
-    @MinLength(6)
-    @MaxLength(42)
-    password: string
-
-    @ApiProperty({
-        example: '08131911964'
-    })
-    @IsString()
-    @IsNotEmpty()
-    phone: string
-
     @ApiProperty({
         enum: Gender
     })
@@ -120,7 +108,7 @@ export class SignupDTO extends EmailDTO {
     gender: Gender
 
     @ApiProperty({
-        example: 'My house address'
+        example: 'My house address',
     })
     @IsString()
     @IsNotEmpty()
@@ -137,43 +125,45 @@ export class BiometricLoginDTO {
     access_token: string
 }
 
-export class UpdatePasswordDTO {
-    @ApiProperty({ example: '^MyPswd123' })
-    @IsString()
-    @IsNotEmpty()
-    @MinLength(6)
-    @MaxLength(42)
-    oldPassword: string
-
-    @ApiProperty({ example: 'MyPswd123' })
-    @IsString()
-    @IsNotEmpty()
-    @MinLength(6)
-    @MaxLength(42)
-    password1: string
-
-    @ApiProperty({ example: 'MyPswd123' })
-    @IsString()
-    @IsNotEmpty()
-    @MinLength(6)
-    @MaxLength(42)
-    password2: string
-}
-
 export class EmergencyContactDTO {
     @ApiProperty({
         example: 'Raheem Kawojue'
     })
     @IsString()
     @IsNotEmpty()
-    @Transform(({ value }) => titleText(value))
-    name: string
+    @Transform(({ value }) => Utils.titleText(value))
+    fullname: string
 
     @ApiProperty({
-        example: '08131911964'
+        example: '+2348131911964',
+        required: false,
+    })
+    @IsString()
+    @IsOptional()
+    phone?: string
+
+    @ApiProperty({
+        example: 'kawojue08@gmail.com',
+        required: false,
+    })
+    @IsEmail()
+    @IsOptional()
+    email?: string
+
+    @ApiProperty({
+        example: 'My house address',
+        required: false
+    })
+    @IsString()
+    @IsOptional()
+    address?: string
+}
+
+export class GoogleSigninDTO extends MobileDeviceDTO {
+    @ApiProperty({
+        example: 'xyzcomprom'
     })
     @IsString()
     @IsNotEmpty()
-    @Transform(({ value }) => normalizePhoneNumber(value))
-    phone: string
+    idToken: string
 }
