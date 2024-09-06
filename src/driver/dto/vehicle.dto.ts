@@ -1,8 +1,8 @@
 import { Transform } from "class-transformer"
 import { PartialType } from "@nestjs/mapped-types"
-import { titleText, toUpperCase } from "helpers/transformer"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
 import { IsString, IsOptional, IsNotEmpty, ValidateIf } from 'class-validator'
+import { Utils } from "helpers/utils"
 
 export class VehicleDTO {
     @ApiProperty({
@@ -55,7 +55,7 @@ export class VehicleDTO {
     @IsString()
     @IsOptional()
     @IsNotEmpty()
-    @Transform(({ value }) => toUpperCase(value))
+    @Transform(({ value }) => Utils.toUpperCase(value))
     vin: string
 
     @ApiProperty({
@@ -78,7 +78,7 @@ export class VehicleDTO {
     @IsString()
     @ValidateIf(o => !o.isOwner)
     @IsNotEmpty()
-    @Transform(({ value }) => titleText(value))
+    @Transform(({ value }) => Utils.titleText(value))
     ownerName?: string
 
     @ApiPropertyOptional({

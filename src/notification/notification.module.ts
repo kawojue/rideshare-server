@@ -1,15 +1,35 @@
 import { Module } from '@nestjs/common'
 import { HttpModule } from '@nestjs/axios'
+import { config } from 'configs/env.config'
 import { ApiModule } from 'src/api/api.module'
-import { MailerService } from '@nestjs-modules/mailer'
+import { MailerModule } from '@nestjs-modules/mailer'
+import { PrismaService } from 'prisma/prisma.service'
 import { NotificationService } from './notification.service'
 import { NotificationListener } from './notification.listener'
 
 @Module({
-    providers: [
+    imports: [
         ApiModule,
         HttpModule,
-        MailerService,
+        MailerModule.forRoot({
+            transport: {
+                host: 'smtp.gmail.com',
+                // port: 587, // 465
+                secure: true,
+                service: 'gmail',
+                requireTLS: true,
+                auth: {
+                    user: config.google.email,
+                    pass: config.google.emailPassword,
+                },
+            },
+            defaults: {
+                from: `No Reply`,
+            },
+        }),
+    ],
+    providers: [
+        PrismaService,
         NotificationService,
         NotificationListener,
     ],

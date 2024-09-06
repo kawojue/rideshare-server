@@ -53,7 +53,7 @@ async function bootstrap() {
     await app.listen(PORT)
     console.log(`http://localhost:${PORT}`)
   } catch (err) {
-    console.error(err.message)
+    console.error(err)
   }
 }
 bootstrap()

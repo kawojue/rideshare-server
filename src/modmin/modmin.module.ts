@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common'
 import { JwtModule } from '@nestjs/jwt'
 import { MiscService } from 'libs/misc.service'
 import { ModminService } from './modmin.service'
-import { PlunkService } from 'libs/plunk.service'
 import { PassportModule } from '@nestjs/passport'
 import { JwtStrategy } from 'src/jwt/jwt.strategy'
 import { PrismaService } from 'prisma/prisma.service'
@@ -24,7 +23,6 @@ import { PaystackService } from 'libs/Paystack/paystack.service'
     ModminService,
     JwtStrategy,
     MiscService,
-    PlunkService,
     PrismaService,
     PaystackService,
     ResponseService,

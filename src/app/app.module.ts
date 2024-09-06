@@ -13,7 +13,6 @@ import { UserModule } from 'src/user/user.module'
 import { QueueModule } from 'src/queue/queue.module'
 import { StoreModule } from 'src/store/store.module'
 import { PrismaService } from 'prisma/prisma.service'
-import { MailerModule } from '@nestjs-modules/mailer'
 import { DriverModule } from 'src/driver/driver.module'
 import { WalletModule } from 'src/wallet/wallet.module'
 import { ModminModule } from 'src/modmin/modmin.module'
@@ -40,22 +39,6 @@ import { NotificationModule } from 'src/notification/notification.module'
     NotificationModule,
     ConfigModule.forRoot({
       load: [cloudinaryConfig],
-    }),
-    MailerModule.forRoot({
-      transport: {
-        host: 'smtp.gmail.com',
-        // port: 587, // 465
-        secure: true,
-        service: 'gmail',
-        requireTLS: true,
-        auth: {
-          user: config.google.email,
-          pass: config.google.emailPassword,
-        },
-      },
-      defaults: {
-        from: `No Reply`,
-      },
     }),
     EventEmitterModule.forRoot({ global: true }),
     BullModule.forRoot({

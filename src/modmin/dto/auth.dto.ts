@@ -7,8 +7,8 @@ import {
 } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
-import { titleText } from 'helpers/transformer'
 import { EmailDTO } from 'src/auth/dto/auth.dto'
+import { Utils } from 'helpers/utils'
 
 enum Role {
     ADMIN = "ADMIN",
@@ -29,7 +29,7 @@ export class InviteNewModminDTO extends LoginDTO {
         example: 'Raheem Kawojue'
     })
     @IsNotEmpty()
-    @Transform(({ value }) => titleText(value))
+    @Transform(({ value }) => Utils.titleText(value))
     fullname: string
 
     @ApiProperty({

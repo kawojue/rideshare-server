@@ -31,6 +31,7 @@ import { MiscService } from 'libs/misc.service'
 import { OAuth2Client } from 'google-auth-library'
 import { PrismaService } from 'prisma/prisma.service'
 import { EventEmitter2 } from '@nestjs/event-emitter'
+import { StoreService } from 'src/store/store.service'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
 
 const isEmail = require('is-email')
@@ -41,6 +42,7 @@ export class AuthService {
 
     constructor(
         private readonly misc: MiscService,
+        private readonly store: StoreService,
         private readonly event: EventEmitter2,
         private readonly prisma: PrismaService,
         private readonly jwtService: JwtService,
@@ -73,18 +75,6 @@ export class AuthService {
                 lastLoggedInAt: new Date(),
                 notificationToken, deviceId,
             }
-        })
-    }
-
-    private async updateCache(refresh_token: string, userId: string) {
-        await this.prisma.cache.upsert({
-            where: { key: `token_${userId}`, userId: userId },
-            create: {
-                refresh_token,
-                type: 'TOKEN_REFRESHER',
-                key: `token_${userId}`,
-            },
-            update: { refresh_token }
         })
     }
 
@@ -161,7 +151,7 @@ export class AuthService {
                 this.misc.generateRefreshToken(jwtPayload)
             ])
 
-            await this.updateCache(refresh_token, user.id)
+            await this.store.set(`token_${user.id}`, refresh_token)
 
             const setup = await this.prisma.profileSetup(user.id)
 
@@ -326,7 +316,7 @@ export class AuthService {
                 this.misc.generateRefreshToken(payload)
             ])
 
-            await this.updateCache(refresh_token, user.id)
+            await this.store.set(`token_${user.id}`, refresh_token)
 
             return { access_token, refresh_token, nextAction }
         }
@@ -391,7 +381,7 @@ export class AuthService {
             this.misc.generateRefreshToken(payload)
         ])
 
-        await this.updateCache(refresh_token, sub)
+        await this.store.set(`token_${user.id}`, refresh_token)
 
         return {
             user,
@@ -453,13 +443,7 @@ export class AuthService {
     async refreshAccessToken(req: Request) {
         const refreshToken = req.cookies.refresh_token
 
-        const cache = await this.prisma.cache.findFirst({
-            where: {
-                refresh_token: refreshToken
-            }
-        })
-
-        if (!refreshToken || !cache) {
+        if (!refreshToken) {
             throw new ForbiddenException()
         }
 

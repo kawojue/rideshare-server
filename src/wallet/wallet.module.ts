@@ -15,9 +15,9 @@ import { PaystackService } from 'libs/Paystack/paystack.service'
     WalletService,
     JwtService,
     PrismaService,
+    EventEmitter2,
     ResponseService,
     PaystackService,
-    EventEmitter2,
   ],
 })
 export class WalletModule { }

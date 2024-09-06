@@ -1,7 +1,7 @@
 import {
+    CreateSmsNotificationEvent,
     CreatePushNotificationEvent,
     CreateEmailNotificationEvent,
-    CreateSmsNotificationEvent,
     CreateInAppNotificationEvent,
 } from './notification.event'
 import * as admin from 'firebase-admin'
@@ -20,16 +20,18 @@ export class NotificationService {
         private readonly mail: MailerService,
         private readonly prisma: PrismaService,
     ) {
-        const key: admin.ServiceAccount = JSON.parse(
-            atob(config.google.serviceAccountKey),
-        )
+        if (config.google.serviceAccountKey) {
+            const key: admin.ServiceAccount = JSON.parse(
+                atob(config.google.serviceAccountKey),
+            )
 
-        if (!admin.apps.length) {
-            admin.initializeApp({
-                credential: admin.credential.cert(
-                    key as admin.ServiceAccount,
-                ),
-            })
+            if (!admin.apps.length) {
+                admin.initializeApp({
+                    credential: admin.credential.cert(
+                        key as admin.ServiceAccount,
+                    ),
+                })
+            }
         }
     }
 

@@ -1,8 +1,8 @@
 
+import { Utils } from 'helpers/utils'
 import { ApiProperty } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
-import { toLowerCase } from 'helpers/transformer'
-import { IsEnum, IsOptional, IsString } from 'class-validator'
+import { IsOptional, IsString } from 'class-validator'
 
 export class SearchDTO {
     @ApiProperty({
@@ -10,7 +10,7 @@ export class SearchDTO {
     })
     @IsString()
     @IsOptional()
-    @Transform(({ value }) => toLowerCase(value))
+    @Transform(({ value }) => Utils.toLowerCase(value))
     search?: string
 }
 
