@@ -2,6 +2,7 @@ import {
     CreatePushNotificationEvent,
     CreateEmailNotificationEvent,
     CreateSmsNotificationEvent,
+    CreateInAppNotificationEvent,
 } from './notification.event'
 import * as admin from 'firebase-admin'
 import { Injectable } from '@nestjs/common'
@@ -67,11 +68,25 @@ export class NotificationService {
     }
 
     async sendSmsNotification({ message, phone }: CreateSmsNotificationEvent) {
+        const params = new URLSearchParams()
 
+        params.append('to', phone)
+        params.append('message', message)
+        params.append('from', config.africasTalking.shortCode)
+        params.append('username', config.africasTalking.username)
 
-        await this.api.POST<AfricasTalkingResponse>(`${config.sendChamp.baseUrl}/sms/send?`, {}, {
+        await this.api.POST<AfricasTalkingResponse>(`${config.africasTalking.baseUrl}/messaging?${params.toString()}`, {}, {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
+        })
+    }
+
+    async sendInAppNotification({ body, topic, title, userId }: CreateInAppNotificationEvent) {
+        await this.prisma.notification.create({
+            data: {
+                title, topic, body,
+                ...(userId && { userId })
+            }
         })
     }
 }

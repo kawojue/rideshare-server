@@ -12,15 +12,16 @@ import {
 } from '@nestjs/common'
 import { Role } from '@prisma/client'
 import { Utils } from 'helpers/utils'
+import { RealIP } from 'nestjs-real-ip'
 import { Request, Response } from 'express'
 import { Roles } from 'src/jwt/role.decorator'
 import { StatusCodes } from 'enums/statusCodes'
 import { WalletService } from './wallet.service'
-import { getIPAddress } from 'helpers/getIPAddress'
+import { ValidateBankDTO } from './dto/bank.dto'
 import { AmountDTO, FundWalletDTO } from './dto/tx.dto'
 import { ResponseService } from 'libs/response.service'
 import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
-import { BankDetailsDTO, ValidateBankDTO } from './dto/bank.dto'
+import { GetAuthParam } from 'src/jwt/auth-param.decorator'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
 
 @ApiBearerAuth()
@@ -42,88 +43,67 @@ export class WalletController {
 
   @Get('/verify/bank-details')
   async bankAccountVerification(@Res() res: Response, @Query() query: ValidateBankDTO) {
-    await this.walletService.bankAccountVerification(res, query)
+    const resoleveAccount = await this.walletService.bankAccountVerification(query)
+
+    return this.response.sendSuccess(res, StatusCodes.OK, { data: resoleveAccount })
   }
 
   @Get('/fetch/banks')
   async fetchBanks(@Res() res: Response) {
-    await this.walletService.fetchBanks(res)
+    const banks = await this.walletService.fetchBanks()
+
+    return this.response.sendSuccess(res, StatusCodes.OK, { data: banks })
   }
 
   @Get('/fetch/banks/:bankCode')
   async fetchBank(@Res() res: Response, @Param('bankCode') bankCode: string) {
-    await this.walletService.fetchBankByBankCode(res, bankCode)
+    const bank = await this.walletService.fetchBankByBankCode(bankCode)
+
+    return this.response.sendSuccess(res, StatusCodes.OK, { data: bank })
   }
-
-
-  @Get('/linked-banks')
-  @Roles(Role.DRIVER, Role.PASSENGER)
-  async linkedBanks(@Req() req: IRequest, @Res() res: Response) {
-    await this.walletService.linkedBanks(res, req.user)
-  }
-
-
-  @Post('/linked-banks/add')
-  @Roles(Role.PASSENGER, Role.DRIVER)
-  async linkBankAccount(
-    @Req() req: IRequest,
-    @Res() res: Response,
-    @Body() body: BankDetailsDTO
-  ) {
-    await this.walletService.linkBankAccount(res, req.user, body)
-  }
-
-
-  @Get('/linked-banks/:id')
-  @Roles(Role.PASSENGER, Role.DRIVER)
-  async getLinkedBank(
-    @Req() req: IRequest,
-    @Res() res: Response,
-    @Param('id') id: string,
-  ) {
-    await this.walletService.getLinkedBank(id, res, req.user)
-  }
-
 
   @Post('/deposit')
   @Roles(Role.PASSENGER, Role.DRIVER)
   async fundWallet(
     @Res() res: Response,
-    @Req() req: IRequest,
-    @Body() body: FundWalletDTO
+    @Body() body: FundWalletDTO,
+    @GetAuthParam() auth: JwtDecoded,
   ) {
-    await this.walletService.fundWallet(res, req.user, body)
+    const data = await this.walletService.fundWallet(res, auth, body)
+
+    return this.response.sendSuccess(res, StatusCodes.OK, { data })
   }
 
-
-  @Post('/request-withdrawal/:linkedBankId')
-  async initiateWithdrawal(
-    @Req() req: IRequest,
+  @Roles(Role.DRIVER)
+  @Post('/request-withdrawal')
+  async requestWithdrawal(
     @Res() res: Response,
     @Body() body: AmountDTO,
-    @Param('linkedBankId') linkedBankId: string,
+    @GetAuthParam() auth: JwtDecoded,
   ) {
-    await this.walletService.requestWithrawal(res, linkedBankId, req.user, body)
+    const data = await this.walletService.requestWithdrawal(res, auth, body)
+
+    return this.response.sendSuccess(res, StatusCodes.OK, data)
   }
 
   @ApiOperation({
-    summary: "Ignore. It's for Transfer Webhook"
+    summary: "Ignore."
   })
   @Post('/paystack/webhook')
-  async manageFiatEvents(@Req() req: Request) {
+  async manageFiatEvents(@Res() res: Response, @Req() req: Request, @RealIP() ip: string) {
     if (!req.body || !req.body?.event || !req.body?.data) {
       throw new HttpException("Unauthorized IP Address", StatusCodes.BadRequest)
     }
 
     const allowedIPAddresses = ['52.31.139.75', '52.49.173.169', '52.214.14.220']
-    const ipAddress = getIPAddress(req)
 
-    if (!allowedIPAddresses.includes(ipAddress)) {
+    if (!allowedIPAddresses.includes(ip)) {
       throw new HttpException("Unauthorized IP Address", StatusCodes.Unauthorized)
     }
 
     try {
       await this.walletService.enqueueRequest(req)
+      res.sendStatus(StatusCodes.OK).end()
     } catch (err) {
       console.error(err)
       throw new HttpException("Something went wrong", StatusCodes.InternalServerError)

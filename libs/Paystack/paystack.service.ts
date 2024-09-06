@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { config } from 'configs/env.config'
 import { PaystackConsumer } from './consumer.service'
 
 @Injectable()
@@ -6,7 +7,32 @@ export class PaystackService {
     private readonly consumer: PaystackConsumer
 
     constructor() {
-        this.consumer = new PaystackConsumer('https://api.paystack.co', `Bearer ${process.env.PAYSTACK_SECRET_KEY!}`)
+        const { paystack: { testKey, liveKey } } = config
+
+        this.consumer = new PaystackConsumer(
+            'https://api.paystack.co',
+            `Bearer ${config.env === 'live' ? liveKey : testKey}`
+        )
+    }
+
+    createCustomer(customer: CreateCustomerData) {
+        return this.consumer.sendRequest<CreateCustomerResponse>('POST', '/customer', customer)
+    }
+
+    validateCustomer(customerCode: CodeOrId, body: ValidateCustomerData) {
+        return this.consumer.sendRequest<PaystackResponse>('POST', `/customer/${customerCode}/identification`, body)
+    }
+
+    updateCustomer(customerCode: CodeOrId, customer: CreateCustomerOptionalData) {
+        return this.consumer.sendRequest<CreateCustomerResponse>('PUT', `/customer/${customerCode}`, customer)
+    }
+
+    createDVA(body: CreateDedicatedVirtualAccountData) {
+        return this.consumer.sendRequest<CreateDedicatedVirtualAccountResponse>('POST', '/dedicated_account', body)
+    }
+
+    deactivateDVA(dedicatedAccountId: number) {
+        return this.consumer.sendRequest<DeactivateDedicatedVirtualAccountResponse>('DELETE', `/dedicated_account/${dedicatedAccountId}`)
     }
 
     verifyDetails({ account_number, bank_code }: VerifyDetailsData) {

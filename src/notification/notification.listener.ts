@@ -2,6 +2,7 @@ import {
     CreateSmsNotificationEvent,
     CreatePushNotificationEvent,
     CreateEmailNotificationEvent,
+    CreateInAppNotificationEvent,
 } from './notification.event'
 import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
@@ -24,5 +25,10 @@ export class NotificationListener {
     @OnEvent('notification.sms')
     async sendSms(event: CreateSmsNotificationEvent) {
         await this.service.sendSmsNotification(event)
+    }
+
+    @OnEvent('notification.in-app')
+    async sendInApp(event: CreateInAppNotificationEvent) {
+        await this.service.sendInAppNotification(event)
     }
 }

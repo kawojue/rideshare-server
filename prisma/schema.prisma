@@ -12,6 +12,7 @@ model User {
   firstname           String
   lastname            String
   middlename          String?
+  customerCode        String?   @map("customer_code")
   status              Status    @default(ACTIVE)
   email               String?   @unique
   phone               String?   @unique
@@ -33,7 +34,6 @@ model User {
   cache                Cache[]
   vehicles             Vehicle[]
   transactionHistories TxHistory[]
-  banks                LinkedBank[]
   mobileDevices        MobileDevice[]
   raters               Rating[]       @relation("RaterUser")
   ratings              Rating[]       @relation("TargetUser")
@@ -41,6 +41,7 @@ model User {
   receivedMessages     Message[]      @relation("UserReceivedMessages")
   receivedCallLogs     CallLog[]      @relation("UserReceivedCalls")
   initiatedCallLogs    CallLog[]      @relation("UserInitiatedCalls")
+  notifications        Notification[]
 
   @@index([role])
   @@index([status])
@@ -201,6 +202,23 @@ model Cache {
   @@map("cache")
 }
 
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  topic     NotificationType
+  body      String
+  title     String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  userId String? @map("user_id") @db.Uuid
+  user   User?   @relation(references: [id], fields: [userId], onDelete: Cascade)
+
+  @@index([topic])
+  @@index([createdAt, updatedAt])
+  @@map("notifications")
+}
+
 model Totp {
   id          String    @id @default(uuid()) @db.Uuid
   key         String?   @unique
@@ -217,26 +235,6 @@ model Totp {
   @@index([createdAt, updatedAt])
   @@index([totp])
   @@map("otps")
-}
-
-model LinkedBank {
-  id            String   @id @default(uuid()) @db.Uuid
-  bankName      String   @map("bank_name")
-  accountName   String   @map("account_name")
-  accountNumber String   @map("account_number")
-  bankCode      String   @map("bank_code")
-  primary       Boolean  @default(false)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  withdrawalRequests WithdrwalRequest[]
-
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String @map("user_id") @db.Uuid
-
-  @@index([accountNumber, bankCode])
-  @@index([createdAt, updatedAt])
-  @@map("linked_banks")
 }
 
 model TxHistory {
@@ -272,6 +270,11 @@ model TxHistory {
 model Wallet {
   id                  String    @id @default(uuid()) @db.Uuid
   locked              Boolean   @default(false)
+  accountName         String?   @map("account_name")
+  accountNumber       String?   @map("account_number")
+  dvaId               String?   @map("dva_id")
+  currency            String?
+  bankName            String?   @map("bank_name")
   balance             Decimal   @default(0.00) @db.Decimal(10, 2)
   lastApprovedAmount  Decimal   @default(0.00) @map("last_approved_amount") @db.Decimal(10, 2)
   lastDepositedAmount Decimal   @default(0.00) @map("last_deposited_amount") @db.Decimal(10, 2)
@@ -283,6 +286,8 @@ model Wallet {
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String @unique @map("user_id") @db.Uuid
+
+  requests WithdrwalRequest[]
 
   @@index([createdAt, updatedAt])
   @@map("wallets")
@@ -296,8 +301,8 @@ model WithdrwalRequest {
   createdAt DateTime     @default(now()) @map("created_at")
   updatedAt DateTime     @updatedAt @map("updated_at")
 
-  linkedBank   LinkedBank @relation(fields: [linkedBankId], references: [id], onDelete: NoAction)
-  linkedBankId String     @map("linked_bank_id") @db.Uuid
+  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  walletId String @map("wallet_id") @db.Uuid
 
   @@index([status])
   @@index([createdAt, updatedAt])
@@ -415,8 +420,8 @@ enum Role {
 }
 
 enum Gender {
-  M
-  F
+  MALE
+  FEMALE
 }
 
 enum Provider {
@@ -469,4 +474,12 @@ enum IDType {
   NIN
   VOTER
   PASSPORT
+}
+
+enum NotificationType {
+  GENERAL
+  WEBHOOK
+  ACTIVITY
+  TRANSACTION
+  ANNOUNCEMENT
 }

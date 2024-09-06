@@ -1,20 +1,25 @@
 import { Mutex } from 'async-mutex'
-import { Injectable } from '@nestjs/common'
+import { Utils } from 'helpers/utils'
+import {
+    CreatePushNotificationEvent,
+    CreateEmailNotificationEvent,
+    CreateInAppNotificationEvent,
+} from 'src/notification/notification.event'
 import { Request, Response } from 'express'
 import { TransferStatus } from '@prisma/client'
-import { MiscService } from 'libs/misc.service'
 import { StatusCodes } from 'enums/statusCodes'
+import { ValidateBankDTO } from './dto/bank.dto'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { PrismaService } from 'prisma/prisma.service'
 import { ResponseService } from 'libs/response.service'
 import { AmountDTO, FundWalletDTO } from './dto/tx.dto'
-import { BankDetailsDTO, ValidateBankDTO } from './dto/bank.dto'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { PaystackService } from 'libs/Paystack/paystack.service'
-import { removeNullFields, toUpperCase } from 'helpers/transformer'
 
 @Injectable()
 export class WalletService {
     constructor(
-        private readonly misc: MiscService,
+        private readonly event: EventEmitter2,
         private readonly prisma: PrismaService,
         private readonly response: ResponseService,
         private readonly paystack: PaystackService,
@@ -24,177 +29,29 @@ export class WalletService {
     private requestQueue: Request[] = []
     private userMutexes = new Map<string, Mutex>()
 
-    async bankAccountVerification(res: Response, { account_number, bank_code }: ValidateBankDTO) {
+    async bankAccountVerification({ account_number, bank_code }: ValidateBankDTO) {
         const { data } = await this.paystack.resolveAccount(account_number, bank_code)
-
-        this.response.sendSuccess(res, StatusCodes.OK, { data })
+        return data
     }
 
-    async fetchBanks(res: Response) {
+    async fetchBanks() {
         const { data: banks } = await this.paystack.listBanks()
-
-        this.response.sendSuccess(res, StatusCodes.OK, { data: banks })
+        return banks
     }
 
-    async fetchBankByBankCode(res: Response, bankCode: string) {
+    async fetchBankByBankCode(bankCode: string) {
         const bank = await this.paystack.getBankByBankCode(bankCode)
 
         if (!bank) {
-            return this.response.sendError(res, StatusCodes.NotFound, "No supported Bank Name is associated with this bank code.")
+            throw new NotFoundException("No supported Bank Name is associated with this bank code.")
         }
 
-        this.response.sendSuccess(res, StatusCodes.OK, { data: bank })
+        return bank
     }
 
-    async linkBankAccount(
+    async requestWithdrawal(
         res: Response,
-        { sub }: ExpressUser,
-        { accountNumber, bankCode, otp }: BankDetailsDTO
-    ) {
-        try {
-            const totp = await this.prisma.totp.findUnique({
-                where: { totp: otp, userId: sub }
-            })
-
-            if (!totp || !totp.totp_expiry) {
-                return this.response.sendError(res, StatusCodes.Unauthorized, "Incorrect OTP")
-            }
-
-            if (new Date() > new Date(totp.totp_expiry)) {
-                this.response.sendError(res, StatusCodes.Forbidden, "OTP has expired")
-                await this.prisma.totp.delete({
-                    where: { userId: totp.userId },
-                })
-
-                return
-            }
-
-            const linkedAccounts = await this.prisma.linkedBank.findMany({
-                where: { userId: sub },
-                orderBy: { createdAt: 'desc' },
-            })
-
-            const totalLinked = linkedAccounts.length
-            let canLinkNewAccount = true
-            let replaceAccountId = null
-
-            if (totalLinked === 2) {
-                const lastLinkedBankAccount = linkedAccounts[0]
-
-                const now = new Date().getTime()
-                const lastLinkedDate = new Date(lastLinkedBankAccount.createdAt).getTime()
-                const diffTime = Math.abs(now - lastLinkedDate)
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
-                if (lastLinkedBankAccount.primary) {
-                    canLinkNewAccount = true
-                } else if (diffDays < 60) {
-                    canLinkNewAccount = false
-                    return this.response.sendError(res, StatusCodes.BadRequest, "You cannot link a new bank account until 60 days have passed since the last account was linked")
-                } else {
-                    replaceAccountId = lastLinkedBankAccount.id
-                }
-            }
-
-            if (canLinkNewAccount) {
-                const bank = await this.paystack.getBankByBankCode(bankCode)
-                const { data: details } = await this.paystack.resolveAccount(accountNumber, bankCode)
-
-                if (totalLinked === 0) {
-                    const user = await this.prisma.user.findUnique({
-                        where: { id: sub },
-                        select: {
-                            id: true,
-                            lastname: true,
-                            firstname: true,
-                            middlename: true,
-                        },
-                    })
-
-                    let matchingNamesCount = 0
-
-                    const full_names: string[] = [toUpperCase(user.firstname), toUpperCase(user.lastname), toUpperCase(user.middlename)].filter(Boolean)
-                    const account_names = toUpperCase(details.account_name).split(/[\s,]+/).filter(Boolean)
-
-                    for (const account_name of account_names) {
-                        if (full_names.includes(account_name)) {
-                            matchingNamesCount += 1
-                        }
-                    }
-
-                    if (matchingNamesCount < 2) {
-                        return this.response.sendError(res, StatusCodes.BadRequest, "Account names do not match")
-                    }
-                }
-
-                const data = replaceAccountId
-                    ? await this.prisma.linkedBank.update({
-                        where: { id: replaceAccountId },
-                        data: {
-                            bankCode,
-                            accountNumber,
-                            bankName: bank.name,
-                            primary: totalLinked === 0,
-                            accountName: details.account_name,
-                        },
-                    })
-                    : await this.prisma.linkedBank.create({
-                        data: {
-                            bankCode,
-                            accountNumber,
-                            bankName: bank.name,
-                            primary: totalLinked === 0,
-                            accountName: details.account_name,
-                            user: { connect: { id: sub } },
-                        },
-                    })
-
-                await this.prisma.totp.deleteMany({
-                    where: { userId: sub }
-                })
-
-                this.response.sendSuccess(res, StatusCodes.Created, {
-                    data,
-                    message: replaceAccountId ? "Your bank account has been updated." : "Your bank account has been linked",
-                })
-            }
-        } catch (err) {
-            this.misc.handleServerError(res, err)
-        }
-    }
-
-    async linkedBanks(res: Response, { sub }: ExpressUser) {
-        const banks = await this.prisma.linkedBank.findMany({
-            where: { userId: sub },
-            orderBy: [
-                { primary: 'desc' },
-                { createdAt: 'desc' }
-            ]
-        })
-
-        this.response.sendSuccess(res, StatusCodes.OK, { data: banks })
-    }
-
-    async getLinkedBank(
-        id: string,
-        res: Response,
-        { sub: userId }: ExpressUser,
-    ) {
-        const bank = await this.prisma.linkedBank.findUnique({
-            where: { id, userId }
-        })
-
-        if (!bank) {
-            return this.response.sendError(res, StatusCodes.NotFound, "Linked bank account not found")
-        }
-
-        this.response.sendSuccess(res, StatusCodes.OK, { data: bank })
-    }
-
-    async requestWithrawal(
-        res: Response,
-        linkedBankId: string,
-        { sub: userId }: ExpressUser,
+        { sub: userId }: JwtDecoded,
         { amount }: AmountDTO
     ) {
         let userMutex = this.userMutexes.get(userId)
@@ -221,13 +78,13 @@ export class WalletService {
                 return this.response.sendError(res, StatusCodes.UnprocessableEntity, "Insufficient balance")
             }
 
-            let eligible: boolean = false
+            let eligible = false
 
             if (!wallet.lastApprovedAt) {
                 eligible = true
             } else {
-                const twoWeeksInMilliseconds = 14 * 24 * 60 * 60 * 1000 // 2-weeks
-                const now = new Date().getTime()
+                const twoWeeksInMilliseconds = 14 * 24 * 60 * 60 * 1000 // 2 weeks
+                const now = Date.now()
                 const lastApprovedAt = new Date(wallet.lastApprovedAt).getTime()
 
                 if (now - lastApprovedAt >= twoWeeksInMilliseconds) {
@@ -239,45 +96,47 @@ export class WalletService {
                 return this.response.sendError(res, StatusCodes.BadRequest, "You're not yet eligible for a withdrawal request")
             }
 
-            const linkedBank = await this.prisma.linkedBank.findUnique({
-                where: { id: linkedBankId }
+            await this.prisma.wallet.update({
+                where: { id: wallet.id },
+                data: { locked: true },
             })
-
-            if (!linkedBank) {
-                return this.response.sendError(res, StatusCodes.NotFound, "Linked bank not found")
-            }
 
             const withdrawalRequest = await this.prisma.$transaction([
                 this.prisma.withdrwalRequest.create({
                     data: {
-                        amount: amount,
+                        amount,
                         status: 'PENDING',
-                        linkedBank: { connect: { id: linkedBankId } }
-                    }
+                        wallet: { connect: { id: wallet.id } },
+                    },
                 }),
                 this.prisma.wallet.update({
                     where: { id: wallet.id },
                     data: {
                         lastRequestedAt: new Date(),
                         balance: { decrement: amount },
-                    }
-                })
+                    },
+                }),
             ])
 
-            this.response.sendSuccess(res, StatusCodes.OK, {
-                data: withdrawalRequest,
+            return {
                 message: "Withdrawal request has been sent to the Admin in charge",
-            })
+                data: withdrawalRequest,
+            }
         } catch (err) {
-            this.misc.handleServerError(res, err)
+            console.error(err)
+            return this.response.sendError(res, StatusCodes.InternalServerError, "Something went wrong. Please try again later.")
         } finally {
             release()
+            await this.prisma.wallet.update({
+                where: { userId },
+                data: { locked: false },
+            })
         }
     }
 
     async fundWallet(
         res: Response,
-        { sub }: ExpressUser,
+        { sub }: JwtDecoded,
         { reference }: FundWalletDTO,
     ) {
         let userMutex = this.userMutexes.get(sub)
@@ -290,6 +149,10 @@ export class WalletService {
         const release = await userMutex.acquire()
 
         try {
+            const user = await this.prisma.user.findUnique({
+                where: { id: sub }
+            })
+
             const wallet = await this.prisma.getUserWallet(sub)
 
             if (!wallet) {
@@ -306,15 +169,7 @@ export class WalletService {
             const channel = data?.authorization?.channel
             const authorization_code = data?.authorization?.authorization_code
 
-            const [_, tx] = await this.prisma.$transaction([
-                this.prisma.wallet.update({
-                    where: { userId: sub },
-                    data: {
-                        lastDepositedAt: new Date(),
-                        lastDepositedAmount: amount,
-                        balance: { increment: amount },
-                    },
-                }),
+            const [tx] = await this.prisma.$transaction([
                 this.prisma.txHistory.create({
                     data: {
                         amount: amount,
@@ -327,11 +182,55 @@ export class WalletService {
                         status: data.status.toUpperCase() as TransferStatus,
                     },
                 }),
+                this.prisma.wallet.update({
+                    where: { userId: sub },
+                    data: {
+                        lastDepositedAt: new Date(),
+                        lastDepositedAmount: amount,
+                        balance: { increment: amount },
+                    },
+                }),
             ])
 
-            this.response.sendSuccess(res, StatusCodes.OK, { data: removeNullFields(tx) })
+            this.event.emit(
+                'notification.email',
+                new CreateEmailNotificationEvent({
+                    emails: user.email,
+                    template: 'FundWallet',
+                    data: {
+                        amount,
+                        type: 'DEPOSIT',
+                        date: tx.createdAt,
+                        channel: tx.channel,
+                        reference: tx.reference,
+                    },
+                    subject: 'Account Funded'
+                })
+            )
+
+            this.event.emit(
+                'notification.in-app',
+                new CreateInAppNotificationEvent({
+                    userId: sub,
+                    topic: 'TRANSACTION',
+                    title: 'Wallet Funded',
+                    body: `You've been credited with ₦${amount.toFixed(2)} - ${tx.reference}`
+                })
+            )
+
+            this.event.emit(
+                'notification.push',
+                new CreatePushNotificationEvent({
+                    userId: sub,
+                    title: 'Wallet Funded',
+                    body: `You've been credited with ₦${amount.toFixed(2)}`
+                })
+            )
+
+            return Utils.removeNullFields(tx)
         } catch (err) {
             console.error(err)
+            return this.response.sendError(res, StatusCodes.InternalServerError, "Something went wrong. Please try again later.")
         } finally {
             release()
         }
@@ -364,7 +263,7 @@ export class WalletService {
             const transaction = await this.getTransaction(data.reference)
 
             if (transaction) {
-                await this.updateTransactionStatus(transaction.reference, toUpperCase(data.status) as TransferStatus)
+                await this.updateTransactionStatus(transaction.reference, Utils.toUpperCase(data.status) as TransferStatus)
 
                 const amount = this.calculateTotalAmount(data.amount, +transaction.totalFee)
 

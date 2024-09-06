@@ -1,3 +1,5 @@
+import { NotificationType } from "@prisma/client"
+
 export class CreateEmailNotificationEvent {
     emails: string | string[]
     subject: string
@@ -48,13 +50,32 @@ export class CreatePushNotificationEvent {
 
 export class CreateSmsNotificationEvent {
     message: string
-    phone: string | string[]
+    phone: string
 
     constructor({ phone, message }: {
         message: string
         phone: string | string[]
     }) {
         this.message = message
-        this.phone = phone
+        this.phone = Array.isArray(phone) ? phone.join(',') : phone
+    }
+}
+
+export class CreateInAppNotificationEvent {
+    body: string
+    topic: NotificationType
+    title?: string
+    userId?: string
+
+    constructor({ topic, title, body, userId }: {
+        body: string
+        title?: string
+        userId?: string
+        topic: NotificationType
+    }) {
+        this.body = body
+        this.topic = topic
+        this.title = title
+        this.userId = userId
     }
 }

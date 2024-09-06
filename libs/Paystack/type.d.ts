@@ -1,4 +1,3 @@
-
 type CountryCode = "NG"
 type CurrencyCode = "NGN"
 type AccountType = "nuban"
@@ -6,8 +5,8 @@ type TransferSource = "balance"
 type CustomerType = "bank_account"
 type ChargeEvent = "charge.success"
 type TransferWebhookStatus = "success" | "failed" | "reversed"
-type FiatEvents = CustomerIdentificationEvent | TransferWebhookEvent | ChargeEvent
 type TransferWebhookEvent = "transfer.success" | "transfer.failed" | "transfer.reversed"
+type CustomerIdentificationEvent = "customeridentification.failed" | "customeridentification.success"
 
 interface PaystackResponse<T = {}> {
     status: boolean
@@ -16,6 +15,89 @@ interface PaystackResponse<T = {}> {
 }
 
 type CodeOrId = string | number
+
+interface CreateCustomerResponse {
+    status: boolean
+    message: string
+    data: {
+        email: string
+        integration: number
+        domain: string
+        customer_code: string
+        id: number
+        phone?: string
+        identified: boolean
+        identifications: null
+        createdAt: string
+        updatedAt: string
+    }
+}
+
+interface CreateCustomerData {
+    email: string
+    first_name: string
+    last_name: string
+    phone?: string
+    metadata?: Record<string, any>
+}
+
+interface ValidateCustomerData {
+    first_name: string
+    last_name: string
+    type: CustomerType
+    country: CountryCode
+    bvn: string
+    bank_code: string
+    account_number: string
+}
+
+interface CreateCustomerOptionalData extends Partial<CreateCustomerData> {
+    email?: string
+    metadata?: Record<string, any>
+}
+
+interface CreateDedicatedVirtualAccountData {
+    customer: CodeOrId
+    preferred_bank: 'wema-bank' | 'paystack-titan' | 'test-bank'
+}
+
+interface DedicatedVirtualAccountResponseData {
+    bank: {
+        id: number
+        name: string
+        slug: string
+    }
+    assignment: {
+        integration: number
+        assignee_id: number
+        assignee_type: string
+        expired: boolean
+        account_type: string
+        assigned_at: string
+    }
+    customer: {
+        id: number
+        first_name: string
+        last_name: string
+        email: string
+        customer_code: string
+        phone: string
+        risk_action: string
+    }
+    account_name: string
+    account_number: string
+    assigned: boolean
+    currency: string
+    metadata: Record<string, any> | null
+    active: boolean
+    id: number
+    created_at: string
+    updated_at: string
+}
+
+interface CreateDedicatedVirtualAccountResponse extends PaystackResponse<DedicatedVirtualAccountResponseData> { }
+
+interface DeactivateDedicatedVirtualAccountResponse extends PaystackResponse<DedicatedVirtualAccountResponseData> { }
 
 interface CreateRecipientData {
     type: AccountType

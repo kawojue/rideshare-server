@@ -14,22 +14,24 @@ import {
     BadRequestException,
     UnauthorizedException
 } from '@nestjs/common'
-import { Request, Response } from 'express'
+import { Queue } from 'bullmq'
 import { Utils } from 'helpers/utils'
 import { UAParser } from 'ua-parser-js'
 import { JwtService } from '@nestjs/jwt'
+import { DaysToMilli } from 'enums/base'
 import { validateFile } from 'utils/file'
+import { Request, Response } from 'express'
 import { config } from 'configs/env.config'
 import {
     CreateSmsNotificationEvent,
     CreateEmailNotificationEvent,
 } from 'src/notification/notification.event'
+import { InjectQueue } from '@nestjs/bullmq'
 import { MiscService } from 'libs/misc.service'
 import { OAuth2Client } from 'google-auth-library'
 import { PrismaService } from 'prisma/prisma.service'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
-import { DaysToMilli } from 'enums/base'
 
 const isEmail = require('is-email')
 
@@ -43,6 +45,7 @@ export class AuthService {
         private readonly prisma: PrismaService,
         private readonly jwtService: JwtService,
         private readonly cloudinary: CloudinaryService,
+        @InjectQueue('create-customer-queue') private createCustomer: Queue,
     ) {
         this.client = new OAuth2Client()
     }
@@ -107,7 +110,7 @@ export class AuthService {
         try {
             const tk = await this.client.verifyIdToken({
                 idToken,
-                audience: os === "android" ? config.google.clientId.android : config.google.clientId.ios
+                audience: os === "android" ? config.google.clientId.android : os === "ios" ? config.google.clientId.ios : ''
             })
             const payload = tk.getPayload()
 
@@ -197,25 +200,29 @@ export class AuthService {
 
         let emitted: boolean
 
-        if (isPhone) {
-            emitted = this.event.emit(
-                'notification.sms',
-                new CreateSmsNotificationEvent({
-                    phone: identifier,
-                    message: `OTP Code <${totp}>. Rideshare`
-                })
-            )
-        }
+        if (config.env === 'live') {
+            if (isPhone) {
+                emitted = this.event.emit(
+                    'notification.sms',
+                    new CreateSmsNotificationEvent({
+                        phone: identifier,
+                        message: `OTP Code <${totp}>. Rideshare`
+                    })
+                )
+            }
 
-        if (!isPhone) {
-            emitted = this.event.emit(
-                'notification.email',
-                new CreateEmailNotificationEvent({
-                    emails: identifier,
-                    subject: user ? 'Login Verification' : 'Verify your Email',
-                    template: user ? 'SigninVerification' : 'EmailVerification'
-                })
-            )
+            if (!isPhone) {
+                emitted = this.event.emit(
+                    'notification.email',
+                    new CreateEmailNotificationEvent({
+                        emails: identifier,
+                        subject: user ? 'Login Verification' : 'Verify your Email',
+                        template: user ? 'SigninVerification' : 'EmailVerification'
+                    })
+                )
+            }
+        } else {
+            emitted = true
         }
 
         if (emitted) {
@@ -240,7 +247,6 @@ export class AuthService {
     }
 
     async verifySignin(req: Request, { otp, identifier, ...device }: VerifySigninDTO) {
-        let verified: boolean
         const isPhone = !isEmail(identifier)
 
         let nextAction = 'DASHBOARD'
@@ -251,87 +257,78 @@ export class AuthService {
             const { countryCode, regionCode, significant } = Utils.normalizePhoneNumber(identifier)
 
             phoneData = { countryCode, regionCode, significant }
-            // Verification
         }
 
-        if (!isPhone) {
-            const totp = await this.prisma.totp.findUnique({
+        const totp = await this.prisma.totp.findUnique({
+            where: { key: identifier }
+        })
+
+        if (!totp) {
+            throw new UnauthorizedException("Invalid OTP")
+        }
+
+        if (new Date() > totp.totp_expiry) {
+            await this.prisma.totp.delete({
                 where: { key: identifier }
             })
-
-            if (!totp) {
-                throw new UnauthorizedException("Invalid OTP")
-            }
-
-            if (new Date() > totp.totp_expiry) {
-                await this.prisma.totp.delete({
-                    where: { key: identifier }
-                })
-                throw new ForbiddenException("Code has expired")
-            }
-
-            if (otp !== totp.totp) {
-                const throttler = await this.prisma.totp.update({
-                    where: { key: identifier },
-                    data: {
-                        counter: { increment: 1 }
-                    }
-                })
-
-                if (throttler.counter >= totp.max) {
-                    await this.prisma.totp.delete({
-                        where: { key: identifier },
-                    })
-                    throw new UnauthorizedException("Incorrect OTP. Max Retries reached.")
-                }
-
-                throw new UnauthorizedException("Incorrect OTP")
-            }
-
-            verified = true
+            throw new ForbiddenException("Code has expired")
         }
 
-        if (verified) {
-            let user = await this.prisma.user.findFirst({
-                where: {
-                    OR: [
-                        { email: identifier },
-                        { phone: identifier },
-                    ]
+        if (otp !== totp.totp) {
+            const throttler = await this.prisma.totp.update({
+                where: { key: identifier },
+                data: {
+                    counter: { increment: 1 }
                 }
             })
 
-            if (!user) {
-                nextAction = 'ONBOARDING'
-                user = await this.prisma.user.create({
-                    data: isPhone ? {
-                        ...phoneData,
-                        phone: `${phoneData.countryCode}${phoneData.significant}`,
-                    } : { email: identifier },
+            if (throttler.counter >= totp.max) {
+                await this.prisma.totp.delete({
+                    where: { key: identifier },
                 })
+                throw new UnauthorizedException("Incorrect OTP. Max Retries reached.")
             }
 
-            if (user) {
-                const mobileDevice = await this.mobileDevice(req, user.id, device.deviceId, device?.notificationToken)
+            throw new UnauthorizedException("Incorrect OTP")
+        }
 
-                const payload = {
-                    sub: user.id,
-                    role: user.role,
-                    status: user.status,
-                    deviceId: mobileDevice.deviceId
-                }
-
-                const [access_token, refresh_token] = await Promise.all([
-                    this.misc.generateAccessToken(payload),
-                    this.misc.generateRefreshToken(payload)
-                ])
-
-                await this.updateCache(refresh_token, user.id)
-
-                return { access_token, refresh_token, nextAction }
+        let user = await this.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: identifier },
+                    { phone: identifier },
+                ]
             }
-        } else {
-            throw new UnauthorizedException("Verification Unsuccessful")
+        })
+
+        if (!user) {
+            nextAction = 'ONBOARDING'
+            user = await this.prisma.user.create({
+                data: isPhone ? {
+                    ...phoneData,
+                    phone: `${phoneData.countryCode}${phoneData.significant}`,
+                } : { email: identifier },
+            })
+        }
+
+        if (user) {
+            const mobileDevice = await this.mobileDevice(req, user.id, device.deviceId, device?.notificationToken)
+
+            const payload = {
+                sub: user.id,
+                role: user.role,
+                status: user.status,
+                deviceId: mobileDevice.deviceId
+            }
+
+            const [access_token, refresh_token] = await Promise.all([
+                this.misc.generateAccessToken(payload),
+                this.misc.generateRefreshToken(payload)
+            ])
+
+            await this.updateCache(refresh_token, user.id)
+
+            return { access_token, refresh_token, nextAction }
         }
     }
 
@@ -362,6 +359,21 @@ export class AuthService {
                 }
             }
         })
+
+        if (user) {
+            await this.createCustomer.add(
+                'create-customer-queue',
+                {
+                    email, phone: user.phone,
+                    last_name: user.lastname,
+                    first_name: user.firstname,
+                },
+                {
+                    lifo: true,
+                    attempts: 3,
+                }
+            )
+        }
 
         const mobileDevice = await this.prisma.mobileDevice.findFirst({
             where: { userId: sub },

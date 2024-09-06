@@ -7,6 +7,7 @@ dotenv.config({
 
 export const config = {
     isProd: process.env.NODE_ENV === "production",
+    env: process.env.ENV as 'test' | 'live',
     jwt: {
         secret: process.env.JWT_SECRET,
     },
@@ -36,8 +37,25 @@ export const config = {
         baseUrl: process.env.SEND_CHAMP_BASE_URL,
         senderId: process.env.SEND_CHAMP_SENDER_ID
     },
+    africasTalking: {
+        apiKey: process.env.AFRICAS_TALKING_API_KEY,
+        baseUrl: process.env.AFRICAS_TALKING_BASE_URL,
+        username: process.env.AFRICAS_TALKING_USERNAME,
+        shortCode: process.env.AFRICAS_TALKING_SHORT_CODE
+    },
     qoreId: {
         clientId: process.env.QOREID_CLIENT_ID,
         secret: process.env.QOREID_CLIENT_SECRET
-    }
+    },
+    paystack: {
+        testKey: process.env.PAYSTACK_SECRET_TEST_KEY,
+        liveKey: process.env.PAYSTACK_SECRET_LIVE_KEY,
+    },
+    redis: {
+        host: process.env.REDIS_HOST,
+        username: process.env.REDIS_USERNAME,
+        password: process.env.REDIS_PASSWORD,
+        port: parseInt(process.env.REDIS_PORT, 10),
+        database: parseInt(process.env.REDIS_DATABASE),
+    },
 }

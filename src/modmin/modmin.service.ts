@@ -10,90 +10,85 @@ import {
     FetchWithdrawalRequestsDTO,
 } from 'src/app/dto/pagination.dto'
 import { avatars } from 'utils/avatars'
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { StatusCodes } from 'enums/statusCodes'
 import { MiscService } from 'libs/misc.service'
-import { titleText } from 'helpers/transformer'
-import { PlunkService } from 'libs/plunk.service'
 import { PrismaService } from 'prisma/prisma.service'
 import { WithdrawalRequestDTO } from './dto/payout.dto'
 import { ResponseService } from 'libs/response.service'
-import { generateRandomDigits } from 'helpers/generators'
 import { EncryptionService } from 'libs/encryption.service'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
 import { PaystackService } from 'libs/Paystack/paystack.service'
+import { Utils } from 'helpers/utils'
+import { EventEmitter2 } from '@nestjs/event-emitter'
+import { CreateEmailNotificationEvent } from 'src/notification/notification.event'
 
 
 @Injectable()
 export class ModminService {
-    private readonly isProd: boolean
-
     constructor(
         private readonly misc: MiscService,
-        private readonly plunk: PlunkService,
+        private readonly event: EventEmitter2,
         private readonly prisma: PrismaService,
         private readonly response: ResponseService,
         private readonly paystack: PaystackService,
         private readonly encryption: EncryptionService,
-    ) {
-        this.isProd = process.env.NODE_ENV === "production"
+    ) { }
+
+    private async updateCache(refresh_token: string, modminId: string) {
+        await this.prisma.cache.upsert({
+            where: { key: `token_${modminId}`, modminId },
+            create: {
+                refresh_token,
+                type: 'TOKEN_REFRESHER',
+                key: `token_${modminId}`,
+            },
+            update: { refresh_token }
+        })
     }
 
-    async login(res: Response, { email, password }: LoginDTO) {
+    async login({ email, password }: LoginDTO) {
         const modmin = await this.prisma.modmin.findUnique({
             where: { email }
         })
 
         if (!modmin) {
-            return this.response.sendError(res, StatusCodes.NotFound, "Moderator or Admin not found")
+            throw new NotFoundException("Moderator or Admin not found")
         }
 
         if (modmin.status === "SUSPENDED") {
-            return this.response.sendError(res, StatusCodes.Forbidden, "Account suspended")
+            throw new ForbiddenException("Account suspended")
         }
 
         const isMatch = await this.encryption.compare(password, modmin.password)
         if (!isMatch) {
-            return this.response.sendError(res, StatusCodes.Unauthorized, "Warning! Password not match")
+            throw new UnauthorizedException("Warning! Password not match")
         }
 
         const payload = {
             sub: modmin.id,
             role: modmin.role,
-            status: modmin.status
+            status: modmin.status,
         } as JwtPayload
 
         const access_token = await this.misc.generateAccessToken(payload)
         const refresh_token = await this.misc.generateRefreshToken(payload)
 
-        await this.prisma.user.update({
-            where: { id: modmin.id },
-            data: { refresh_token }
-        })
+        await this.updateCache(refresh_token, modmin.id)
 
-        res.cookie('refresh_token', refresh_token, {
-            httpOnly: true,
-            sameSite: this.isProd ? 'none' : 'lax',
-            secure: this.isProd,
-            maxAge: 60 * 60 * 24 * 60 * 1000,
-        })
-
-        this.response.sendSuccess(res, StatusCodes.OK, {
+        return {
             access_token,
+            refresh_token,
             data: {
                 role: modmin.role,
                 email: modmin.email,
                 avatar: modmin.avatar,
                 fullname: modmin.fullname,
             }
-        })
+        }
     }
 
-    async updateAvatar(
-        res: Response,
-        avatarId: string,
-        { sub }: ExpressUser,
-    ) {
+    async updateAvatar(avatarId: string, { sub }: JwtDecoded) {
         const avatar = avatars.find(avatar => String(avatar.id) === avatarId)
 
         const data = await this.prisma.modmin.update({
@@ -102,64 +97,60 @@ export class ModminService {
             select: { avatar: true }
         })
 
-        this.response.sendSuccess(res, StatusCodes.OK, { data })
+        return data
     }
 
-    async inviteNewModmin(res: Response, { email, password, role, fullname }: InviteNewModminDTO) {
-        try {
-            const isExists = await this.prisma.modmin.findUnique({
-                where: { email }
-            })
+    async inviteNewModmin({ email, password, role, fullname }: InviteNewModminDTO) {
+        const isExists = await this.prisma.modmin.findUnique({
+            where: { email }
+        })
 
-            if (isExists) {
-                return this.response.sendError(res, StatusCodes.Conflict, `${titleText(isExists.role)} already exists`)
+        if (isExists) {
+            throw new ConflictException(`${Utils.titleText(isExists.role)} already exists`)
+        }
+
+        const hashedPswd = await this.encryption.hash(password, 12)
+
+        const modmin = await this.prisma.modmin.create({
+            data: {
+                fullname,
+                role, email,
+                password: hashedPswd,
+                avatar: avatars[Math.floor(Math.random() * avatars.length)].url,
+            },
+            select: {
+                role: true,
+                email: true,
+                avatar: true,
+                fullname: true,
             }
+        })
 
-            const hashedPswd = await this.encryption.hash(password, 12)
-
-            const modmin = await this.prisma.modmin.create({
-                data: {
-                    role,
-                    email,
-                    fullname,
-                    password: hashedPswd,
-                    avatar: avatars[Math.floor(Math.random() * avatars.length)].url,
-                },
-                select: {
-                    role: true,
-                    avatar: true,
-                    email: true,
-                    fullname: true,
-                }
-            })
-
-            this.response.sendSuccess(res, StatusCodes.OK, { data: { ...modmin, password } })
-        } catch (err) {
-            this.misc.handleServerError(res, err)
-        }
+        return { ...modmin, password }
     }
 
-    async toggleAccountSuspension(
-        res: Response,
-        accountId: string,
-        { sub }: ExpressUser,
-    ) {
+    async toggleAccountSuspension(accountId: string, { sub }: JwtDecoded) {
         if (accountId === sub) {
-            return this.response.sendError(res, StatusCodes.Conflict, "You can't suspend yourself")
+            throw new ConflictException("You can't suspend yourself")
         }
+
 
         let account: User | Modmin | null = await this.prisma.user.findUnique({
             where: { id: accountId }
         })
 
+        let name: string = account?.firstname
+
         if (!account) {
             account = await this.prisma.modmin.findUnique({
                 where: { id: accountId }
             })
+
+            name = account ? account.fullname.split(' ')[0] : ''
         }
 
         if (!account) {
-            return this.response.sendError(res, StatusCodes.NotFound, "Account not found")
+            throw new NotFoundException("Account not found")
         }
 
         const acc = await (this.prisma[`${(account.role === "ADMIN" || account.role === "MODERATOR") ? 'modmin' : 'user'}`] as any).update({
@@ -173,95 +164,94 @@ export class ModminService {
             }
         })
 
-        res.on('finish', async () => {
-            await this.plunk.sendPlunkEmail({
-                to: account.email,
-                subject: 'Account Changed',
-                body: `${acc.status}`
-            })
-        })
-
-        this.response.sendSuccess(res, StatusCodes.OK, { data: acc })
-    }
-
-    async fetchModmins(
-        res: Response,
-        {
-            role,
-            page = 1,
-            limit = 50,
-            search = '',
-            endDate = '',
-            startDate = '',
-        }: FetchModminsDTO
-    ) {
-        try {
-            page = Number(page)
-            limit = Number(limit)
-
-            if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
-                return this.response.sendError(res, StatusCodes.BadRequest, "Invalid pagination query")
-            }
-
-            const offset = (page - 1) * limit
-
-            const dateFilter = {
-                gte: startDate !== '' ? new Date(startDate) : new Date(0),
-                lte: endDate !== '' ? new Date(endDate) : new Date(),
-            }
-
-            const [modmins, total] = await Promise.all([
-                this.prisma.modmin.findMany({
-                    where: {
-                        role: role ? role : { in: ['ADMIN', 'MODERATOR'] },
-                        OR: [
-                            { email: { contains: search, mode: 'insensitive' } },
-                            { fullname: { contains: search, mode: 'insensitive' } },
-                        ],
-                        createdAt: dateFilter
-                    },
-                    select: {
-                        id: true,
-                        role: true,
-                        email: true,
-                        avatar: true,
-                        status: true,
-                        fullname: true,
-                        createdAt: true,
-                    },
-                    take: limit,
-                    skip: offset,
-                    orderBy: { updatedAt: 'desc' }
-                }),
-                this.prisma.modmin.count({
-                    where: {
-                        role: role ? role : { in: ['ADMIN', 'MODERATOR'] },
-                        OR: [
-                            { email: { contains: search, mode: 'insensitive' } },
-                            { fullname: { contains: search, mode: 'insensitive' } },
-                        ],
-                        createdAt: dateFilter
-                    }
-                })
-            ])
-
-            const totalPage = Math.ceil(total / limit)
-            const hasNext = page < totalPage
-            const hasPrev = page > 1
-
-            this.response.sendSuccess(res, StatusCodes.OK, {
-                data: modmins,
-                metadata: {
-                    page,
-                    limit,
-                    total,
-                    totalPage,
-                    hasNext,
-                    hasPrev,
+        this.event.emit(
+            'notification.email',
+            new CreateEmailNotificationEvent({
+                template: (account.role === "ADMIN" || account.role === "MODERATOR") ? 'ModminAccountStatusChanged' : 'UserAccountStatusChanged',
+                subject: acc.status === 'SUSPENDED' ? 'Account Suspended' : 'Account Activated',
+                emails: account.email,
+                data: {
+                    name,
+                    status: acc.status,
+                    date: account.updatedAt,
                 }
             })
-        } catch (err) {
-            this.misc.handleServerError(res, err)
+        )
+
+        return acc
+    }
+
+    async fetchModmins({
+        role,
+        page = 1,
+        limit = 50,
+        search = '',
+        endDate = '',
+        startDate = '',
+    }: FetchModminsDTO) {
+        page = Number(page)
+        limit = Number(limit)
+
+        if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+            throw new BadRequestException("Invalid pagination query")
+        }
+
+        const offset = (page - 1) * limit
+
+        const dateFilter = {
+            gte: startDate !== '' ? new Date(startDate) : new Date(0),
+            lte: endDate !== '' ? new Date(endDate) : new Date(),
+        }
+
+        const [modmins, total] = await Promise.all([
+            this.prisma.modmin.findMany({
+                where: {
+                    role: role ? role : { in: ['ADMIN', 'MODERATOR'] },
+                    OR: [
+                        { email: { contains: search, mode: 'insensitive' } },
+                        { fullname: { contains: search, mode: 'insensitive' } },
+                    ],
+                    createdAt: dateFilter
+                },
+                select: {
+                    id: true,
+                    role: true,
+                    email: true,
+                    avatar: true,
+                    status: true,
+                    fullname: true,
+                    createdAt: true,
+                },
+                take: limit,
+                skip: offset,
+                orderBy: { updatedAt: 'desc' }
+            }),
+            this.prisma.modmin.count({
+                where: {
+                    role: role ? role : { in: ['ADMIN', 'MODERATOR'] },
+                    OR: [
+                        { email: { contains: search, mode: 'insensitive' } },
+                        { fullname: { contains: search, mode: 'insensitive' } },
+                    ],
+                    createdAt: dateFilter
+                }
+            })
+        ])
+
+        const totalPage = Math.ceil(total / limit)
+        const hasNext = page < totalPage
+        const hasPrev = page > 1
+
+        return {
+            data: modmins,
+            metadata: {
+                page,
+                limit,
+                total,
+                totalPage,
+                hasNext,
+                hasPrev,
+            }
         }
     }
 
@@ -273,11 +263,11 @@ export class ModminService {
         try {
             let request = await this.prisma.withdrwalRequest.findUnique({
                 where: { id: requestId },
-                include: { linkedBank: true }
+                include: { wallet: true }
             })
 
             if (!request) {
-                return this.response.sendError(res, StatusCodes.NotFound, "Withdrawal request not found")
+                throw new NotFoundException("Withdrawal request not found")
             }
 
             if (request.locked) {
@@ -293,11 +283,11 @@ export class ModminService {
 
             if (action === "GRANT") {
                 const amount = request.amount
-                const fee = await this.misc.calculateFees(+amount)
+                const fee = Utils.calculateFees(+amount)
                 const settlementAmount = amount.toNumber() - fee.totalFee
                 const amountInKobo = settlementAmount * 100
 
-                const { data: details } = await this.paystack.resolveAccount(request.linkedBank.accountNumber, request.linkedBank.bankCode)
+                const { data: details } = await this.paystack.resolveAccount(request.wallet.accountNumber, request.wallet.)
 
                 const { data: recepient } = await this.paystack.createRecipient({
                     account_number: details.account_number,
@@ -375,7 +365,7 @@ export class ModminService {
 
     async fetchWithdrawalRequest(
         res: Response,
-        { sub, role }: ExpressUser,
+        { sub, role }: JwtDecoded,
         {
             min,
             max,

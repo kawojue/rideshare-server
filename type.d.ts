@@ -31,7 +31,7 @@ interface JwtPayload {
     sub: string
     role?: Roles
     status?: Status
-    deviceId: string
+    deviceId?: string
 }
 
 interface JwtDecoded extends JwtPayload {
@@ -67,4 +67,15 @@ interface EmailAttachment {
     content: string
     mimeType: string
     name: string
+}
+
+interface AfricasTalkingResponse {
+    Message: string
+    Recipients: {
+        statusCode: number
+        number: string
+        status: string
+        cost: string
+        messageId: string
+    }[]
 }

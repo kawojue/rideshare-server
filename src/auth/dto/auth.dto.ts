@@ -1,10 +1,14 @@
+import {
+    IsEnum,
+    Matches,
+    IsEmail,
+    IsString,
+    IsNotEmpty,
+    IsOptional,
+} from 'class-validator'
 import { UserEnum } from 'enums/base'
 import { Utils } from 'helpers/utils'
 import { Gender } from '@prisma/client'
-import {
-    IsEmail, IsEnum, IsNotEmpty, IsOptional,
-    IsString, Matches, MaxLength, MinLength,
-} from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 
