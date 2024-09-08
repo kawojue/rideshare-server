@@ -2,7 +2,6 @@ import {
     IsEnum,
     IsString,
     IsNotEmpty,
-    IsDateString,
 } from "class-validator"
 import { IDType } from "@prisma/client"
 import { ApiProperty } from "@nestjs/swagger"
@@ -18,8 +17,8 @@ export class IDVerificationDTO {
     @ApiProperty({
         example: new Date()
     })
+    @IsString()
     @IsNotEmpty()
-    @IsDateString()
     dob: string
 
     @ApiProperty({
@@ -41,7 +40,7 @@ export class DriverLicenseDTO {
     @ApiProperty({
         example: new Date()
     })
+    @IsString()
     @IsNotEmpty()
-    @IsDateString()
     dob: string
 }

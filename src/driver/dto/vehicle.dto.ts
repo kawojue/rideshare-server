@@ -1,45 +1,38 @@
+import {
+    IsString,
+    MaxLength,
+    IsOptional,
+    IsNotEmpty,
+    ValidateIf,
+} from 'class-validator'
+import { Utils } from "helpers/utils"
 import { Transform } from "class-transformer"
 import { PartialType } from "@nestjs/mapped-types"
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
-import { IsString, IsOptional, IsNotEmpty, ValidateIf } from 'class-validator'
-import { Utils } from "helpers/utils"
 
 export class VehicleDTO {
     @ApiProperty({
-        example: 'Tesla',
+        example: 'Has no tires but manageable',
+        required: false
     })
     @IsString()
-    @IsNotEmpty()
-    brand: string
-
-    @ApiProperty({
-        example: 'Model S',
-    })
-    @IsString()
-    @IsNotEmpty()
-    model: string
-
-    @ApiProperty({
-        example: 'Sedan',
-    })
-    @IsString()
-    @IsNotEmpty()
-    classification: string
+    @MaxLength(150)
+    description?: string
 
     @ApiPropertyOptional({
         example: '2020',
+        required: false,
     })
     @IsString()
     @IsOptional()
-    @Transform(({ value }) => value !== undefined ? value.toString() : undefined)
     year?: string
 
     @ApiProperty({
         example: 'Red',
+        required: false,
     })
     @IsString()
-    @IsNotEmpty()
-    color: string
+    color?: string
 
     @ApiProperty({
         example: 4
@@ -49,20 +42,11 @@ export class VehicleDTO {
     seatNumber: number
 
     @ApiProperty({
-        example: '1HGCM82633A123456',
-        required: false
-    })
-    @IsString()
-    @IsOptional()
-    @IsNotEmpty()
-    @Transform(({ value }) => Utils.toUpperCase(value))
-    vin: string
-
-    @ApiProperty({
         example: 'ABC1234',
     })
     @IsString()
     @IsNotEmpty()
+    @Transform(({ value }) => Utils.replaceSpaces(Utils.toUpperCase(value)))
     plateNumber: string
 
     @ApiProperty({
@@ -74,23 +58,24 @@ export class VehicleDTO {
 
     @ApiPropertyOptional({
         example: 'John Doe',
+        required: false,
     })
     @IsString()
     @ValidateIf(o => !o.isOwner)
-    @IsNotEmpty()
     @Transform(({ value }) => Utils.titleText(value))
     ownerName?: string
 
     @ApiPropertyOptional({
         example: '08131911964',
+        required: false,
     })
     @IsString()
     @ValidateIf(o => !o.isOwner)
-    @IsNotEmpty()
-    ownerPhoneNumber?: string
+    ownerPhoneNo?: string
 
     @ApiPropertyOptional({
         example: true,
+        required: false,
     })
     @IsOptional()
     @Transform(({ value }) => value === "true")

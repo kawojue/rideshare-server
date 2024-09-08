@@ -1,5 +1,6 @@
+import { StatusCodes } from 'enums/statusCodes'
+import { Injectable, HttpException } from '@nestjs/common'
 import axios, { AxiosInstance, AxiosResponse, Method } from 'axios'
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common'
 
 @Injectable()
 export class PaystackConsumer {
@@ -22,9 +23,9 @@ export class PaystackConsumer {
         } catch (err) {
             console.error(err)
             if (err.response) {
-                throw new HttpException(err.response.data, err.response.status)
+                throw new HttpException(err?.response?.data, err.response.status)
             } else {
-                throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR)
+                throw new HttpException('Internal Server Error', StatusCodes.InternalServerError)
             }
         }
     }

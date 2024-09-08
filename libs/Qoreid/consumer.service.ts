@@ -1,8 +1,9 @@
 import { Mutex } from 'async-mutex'
 import { config } from 'configs/env.config'
+import { StatusCodes } from 'enums/statusCodes'
 import { PrismaService } from 'prisma/prisma.service'
+import { HttpException, Injectable } from '@nestjs/common'
 import axios, { AxiosInstance, AxiosResponse, Method } from 'axios'
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common'
 
 @Injectable()
 export class QoreidConsumer {
@@ -12,10 +13,10 @@ export class QoreidConsumer {
     public axiosInstance: AxiosInstance
     private tokenMutex = new Mutex()
 
-    constructor(baseURL: string) {
+    constructor() {
         this.prisma = new PrismaService()
         this.axiosInstance = axios.create({
-            baseURL,
+            baseURL: config.qoreId.baseUrl,
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -91,7 +92,7 @@ export class QoreidConsumer {
             if (error.response) {
                 throw new HttpException(error.response.data, error.response.status)
             } else {
-                throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR)
+                throw new HttpException('Internal Server Error', StatusCodes.InternalServerError)
             }
         }
     }

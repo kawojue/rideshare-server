@@ -11,4 +11,8 @@ export class ResponseService {
     sendSuccess(res: Response, statusCode: StatusCodes, data: any): void {
         res.status(statusCode).json({ success: true, ...data })
     }
+
+    sendNoContent(res: Response): void {
+        res.sendStatus(StatusCodes.NoContent)
+    }
 }

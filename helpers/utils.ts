@@ -147,4 +147,8 @@ export class Utils {
 
         return { processingFee, paystackFee, totalFee }
     }
+
+    static replaceSpaces(text: string, delimiter: string = "") {
+        return text.replace(/\s+/g, delimiter)
+    }
 }

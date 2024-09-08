@@ -44,6 +44,7 @@ export const config = {
         shortCode: process.env.AFRICAS_TALKING_SHORT_CODE
     },
     qoreId: {
+        baseUrl: process.env.QOREID_BASE_URL,
         clientId: process.env.QOREID_CLIENT_ID,
         secret: process.env.QOREID_CLIENT_SECRET
     },

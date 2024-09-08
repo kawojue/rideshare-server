@@ -6,7 +6,7 @@ export class QoreidService {
     private consumer: QoreidConsumer
 
     constructor() {
-        this.consumer = new QoreidConsumer('https://api.qoreid.com/v1/ng/identities')
+        this.consumer = new QoreidConsumer()
     }
 
     votersCard({ idNumber }: IDParam, data: VotersCardBody) {

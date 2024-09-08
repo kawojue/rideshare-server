@@ -57,7 +57,7 @@ export class CreateCusomer extends WorkerHost {
                         new CreateInAppNotificationEvent({
                             title: 'Account Number Assigned!',
                             body: 'A new account number has been generated for you.',
-                            topic: 'ACTIVITY',
+                            topic: 'ACTIVITIES',
                         })
                     )
                 }

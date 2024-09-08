@@ -212,7 +212,7 @@ export class WalletService {
                 'notification.in-app',
                 new CreateInAppNotificationEvent({
                     userId: sub,
-                    topic: 'TRANSACTION',
+                    topic: 'TRANSACTIONS',
                     title: 'Wallet Funded',
                     body: `You've been credited with ₦${amount.toFixed(2)} - ${tx.reference}`
                 })

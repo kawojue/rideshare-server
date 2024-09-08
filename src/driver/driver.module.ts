@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { ConfigService } from '@nestjs/config'
-import { MiscService } from 'libs/misc.service'
 import { DriverService } from './driver.service'
 import { PassportModule } from '@nestjs/passport'
 import { PrismaService } from 'prisma/prisma.service'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { DriverController } from './driver.controller'
 import { ResponseService } from 'libs/response.service'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
@@ -15,7 +15,7 @@ import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
   providers: [
     DriverService,
     JwtService,
-    MiscService,
+    EventEmitter2,
     PrismaService,
     ConfigService,
     ResponseService,

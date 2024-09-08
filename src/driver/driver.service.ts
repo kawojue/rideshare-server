@@ -1,571 +1,482 @@
-import { Response } from 'express'
+import {
+    Injectable,
+    HttpException,
+    ConflictException,
+    NotFoundException,
+    ForbiddenException,
+    BadRequestException,
+    UnauthorizedException,
+} from '@nestjs/common'
+import { Utils } from 'helpers/utils'
+import { Prisma } from '@prisma/client'
 import { validateFile } from 'utils/file'
-import { Injectable } from '@nestjs/common'
-import { MiscService } from 'libs/misc.service'
-import { $Enums, Prisma } from '@prisma/client'
-import { StatusCodes } from 'enums/statusCodes'
 import { PrismaService } from 'prisma/prisma.service'
-import { ResponseService } from 'libs/response.service'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { QoreidService } from 'libs/Qoreid/qoreid.service'
 import { UpdateVehicleDTO, VehicleDTO } from './dto/vehicle.dto'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
 import { DriverLicenseDTO, IDVerificationDTO } from './dto/verification.dto'
+import { CreateEmailNotificationEvent } from 'src/notification/notification.event'
 
 @Injectable()
 export class DriverService {
     private qoreid: QoreidService
 
     constructor(
-        private readonly misc: MiscService,
+        private readonly event: EventEmitter2,
         private readonly prisma: PrismaService,
-        private readonly response: ResponseService,
         private readonly cloudinary: CloudinaryService,
     ) {
         this.qoreid = new QoreidService()
     }
 
-    // private async verifyVehicleOwner(plateNumber: string, firstname: string, lastname: string) {
-    //     const data = await this.qoreid.plateNumber({
-    //         idNumber: plateNumber
-    //     }, {
-    //         firstname,
-    //         lastname
-    //     })
+    private async verifyVehicleOwner(plateNumber: string, firstname: string, lastname: string) {
+        const res = await this.qoreid.plateNumber(
+            { idNumber: plateNumber },
+            { firstname, lastname }
+        )
 
-    //     if (data && data.summary.license_plate_check.status === "EXACT_MATCH") {
-    //         return { verified: true }
-    //     } else {
-    //         return { verified: false }
-    //     }
-    // }
+        let data = { verified: false, metadata: res.license_plate }
 
-    // async idVerification(
-    //     res: Response,
-    //     { sub }: ExpressUser,
-    //     { dob, idType, idNumber }: IDVerificationDTO,
-    // ) {
-    //     const verification = await this.prisma.verification.findUnique({
-    //         where: { driverId: sub },
-    //         include: {
-    //             driver: {
-    //                 select: {
-    //                     firstname: true,
-    //                     lastname: true,
-    //                     email: true,
-    //                     phone: true,
-    //                     profile: {
-    //                         select: {
-    //                             gender: true,
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     })
+        if (res && res.summary.license_plate_check.status === "EXACT_MATCH") {
+            data.verified = true
+        }
 
-    //     if (verification.idVerified) {
-    //         return this.response.sendError(res, StatusCodes.Conflict, "ID has already been verified")
-    //     }
+        return data
+    }
 
-    //     let check: string
-    //     let tailoredData: any
-    //     let data: VotersCardResponse | NINResponse | PassportResponse | null = null
+    async idVerification({ sub }: JwtDecoded, { dob, idType, idNumber }: IDVerificationDTO) {
+        const verification = await this.prisma.verification.findUnique({
+            where: { driverId: sub },
+            include: {
+                driver: {
+                    select: {
+                        firstname: true,
+                        lastname: true,
+                        email: true,
+                        phone: true,
+                        profile: {
+                            select: {
+                                gender: true,
+                            }
+                        }
+                    }
+                }
+            }
+        })
 
-    //     if (idType === "NIN") {
-    //         data = await this.qoreid.nin({ idNumber }, {
-    //             email: verification.driver.email,
-    //             phone: verification.driver.phone,
-    //             lastname: verification.driver.lastname,
-    //             firstname: verification.driver.firstname,
-    //             dob: formatDate(new Date(dob), 'YYYY-MM-DD'),
-    //             gender: verification.driver.profile.gender.toLowerCase(),
-    //         })
+        if (verification.idVerified) {
+            throw new ConflictException("ID has already been verified")
+        }
 
-    //         check = 'nin_check'
+        let check: string
+        let tailoredData: any
+        let data: VotersCardResponse | NINResponse | PassportResponse | null = null
 
-    //         tailoredData = {
-    //             id: data.id,
-    //             firstname: data.nin?.firstname,
-    //             lastname: data.nin?.lastname,
-    //             address: data.nin?.address,
-    //         }
-    //     } else if (idType === "VOTER") {
-    //         data = await this.qoreid.votersCard({ idNumber }, {
-    //             lastname: verification.driver.lastname,
-    //             firstname: verification.driver.firstname,
-    //             dob: formatDate(new Date(dob), 'YYYY-MM-DD'),
-    //         })
+        if (idType === "NIN") {
+            data = await this.qoreid.nin({ idNumber }, {
+                email: verification.driver.email,
+                phone: verification.driver.phone,
+                lastname: verification.driver.lastname,
+                firstname: verification.driver.firstname,
+                dob: Utils.formatDate(new Date(dob), 'YYYY-MM-DD'),
+                gender: verification.driver.profile.gender.toLowerCase(),
+            })
 
-    //         check = 'voters_card_check'
+            check = 'nin_check'
 
-    //         tailoredData = {
-    //             id: data.id,
-    //             firstname: data.voters_card?.firstName,
-    //             lastname: data.voters_card?.lastName,
-    //             occupation: data.voters_card?.occupation,
-    //             pollingUnitCode: data.voters_card.pollingUnitCode,
-    //         }
-    //     } else if (idType === "PASSPORT") {
-    //         data = await this.qoreid.passport({ idNumber }, {
-    //             lastname: verification.driver.lastname,
-    //             firstname: verification.driver.firstname,
-    //             dob: formatDate(new Date(dob), 'YYYY-MM-DD'),
-    //             gender: verification.driver.profile.gender.toLowerCase(),
-    //         })
+            tailoredData = {
+                id: data.id,
+                firstname: data.nin?.firstname,
+                lastname: data.nin?.lastname,
+                address: data.nin?.address,
+            }
+        } else if (idType === "VOTER") {
+            data = await this.qoreid.votersCard({ idNumber }, {
+                lastname: verification.driver.lastname,
+                firstname: verification.driver.firstname,
+                dob: Utils.formatDate(new Date(dob), 'YYYY-MM-DD'),
+            })
 
-    //         check = 'passport_check'
+            check = 'voters_card_check'
 
-    //         tailoredData = {
-    //             id: data.id,
-    //             firstname: data.passport?.firstname,
-    //             lastname: data.passport?.lastname,
-    //             middlename: data.passport?.middlename,
-    //             issuedAt: data.passport?.issuedAt,
-    //             issuedDate: data.passport?.issuedDate,
-    //             expiryDate: data.passport?.expiryDate,
-    //             passportNo: data.passport?.passportNo,
-    //         }
-    //     } else {
-    //         return this.response.sendError(res, StatusCodes.BadRequest, "Invalid ID type")
-    //     }
+            tailoredData = {
+                id: data.id,
+                firstname: data.voters_card?.firstName,
+                lastname: data.voters_card?.lastName,
+                occupation: data.voters_card?.occupation,
+                pollingUnitCode: data.voters_card.pollingUnitCode,
+            }
+        } else if (idType === "PASSPORT") {
+            data = await this.qoreid.passport({ idNumber }, {
+                lastname: verification.driver.lastname,
+                firstname: verification.driver.firstname,
+                dob: Utils.formatDate(new Date(dob), 'YYYY-MM-DD'),
+                gender: verification.driver.profile.gender.toLowerCase(),
+            })
 
-    //     let newVerification: {
-    //         idNumber: string
-    //         idType: $Enums.IDType
-    //         idVerified: boolean
-    //         idVerifiedAt: Date
-    //         idVerificationData: Prisma.JsonValue
-    //         driverId: string
-    //     }
+            check = 'passport_check'
 
-    //     if (data && data.summary[check].status === "EXACT_MATCH") {
-    //         newVerification = await this.prisma.verification.update({
-    //             where: { driverId: sub },
-    //             data: {
-    //                 idType,
-    //                 idNumber,
-    //                 idVerified: true,
-    //                 idVerifiedAt: new Date(),
-    //                 idVerificationData: tailoredData,
-    //             },
-    //             select: {
-    //                 driverId: true,
-    //                 idType: true,
-    //                 idNumber: true,
-    //                 idVerified: true,
-    //                 idVerifiedAt: true,
-    //                 idVerificationData: true,
-    //             }
-    //         })
+            tailoredData = {
+                id: data.id,
+                firstname: data.passport?.firstname,
+                lastname: data.passport?.lastname,
+                middlename: data.passport?.middlename,
+                issuedAt: data.passport?.issuedAt,
+                issuedDate: data.passport?.issuedDate,
+                expiryDate: data.passport?.expiryDate,
+                passportNo: data.passport?.passportNo,
+            }
+        } else {
+            throw new BadRequestException("Invalid ID type")
+        }
 
-    //         this.response.sendSuccess(res, StatusCodes.OK, { newVerification })
-    //     } else {
-    //         return this.response.sendError(res, StatusCodes.BadRequest, "ID verification failed")
-    //     }
-    // }
+        if (data && data.summary[check].status === "EXACT_MATCH") {
+            throw new ForbiddenException("ID verification failed")
+        }
 
-    // async driverLicenseVerification(
-    //     res: Response,
-    //     { sub }: ExpressUser,
-    //     { dob, licenseNumber }: DriverLicenseDTO
-    // ) {
-    //     const verification = await this.prisma.verification.findUnique({
-    //         where: { driverId: sub },
-    //         include: {
-    //             driver: {
-    //                 select: {
-    //                     firstname: true,
-    //                     lastname: true,
-    //                     email: true,
-    //                     phone: true,
-    //                     profile: {
-    //                         select: {
-    //                             gender: true,
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     })
+        return await this.prisma.verification.update({
+            where: { driverId: sub },
+            data: {
+                idType,
+                idNumber,
+                idVerified: true,
+                idVerifiedAt: new Date(),
+                idVerificationData: tailoredData,
+            },
+            select: {
+                idType: true,
+                driverId: true,
+                idNumber: true,
+                idVerified: true,
+                idVerifiedAt: true,
+                idVerificationData: true,
+            }
+        })
+    }
 
-    //     if (verification.driverLicenseVerified) {
-    //         return this.response.sendError(res, StatusCodes.Conflict, "Driver's License has already been verified")
-    //     }
+    async driverLicenseVerification({ sub }: JwtDecoded, { dob, licenseNumber }: DriverLicenseDTO) {
+        const verification = await this.prisma.verification.findUnique({
+            where: { driverId: sub },
+            include: {
+                driver: {
+                    select: {
+                        firstname: true,
+                        lastname: true,
+                        email: true,
+                        phone: true,
+                        profile: {
+                            select: {
+                                gender: true,
+                            }
+                        }
+                    }
+                }
+            }
+        })
 
-    //     const data = await this.qoreid.driversLicense({ idNumber: licenseNumber }, {
-    //         email: verification.driver.email,
-    //         phone: verification.driver.phone,
-    //         lastname: verification.driver.lastname,
-    //         firstname: verification.driver.firstname,
-    //         dob: formatDate(new Date(dob), 'YYYY-MM-DD'),
-    //         gender: verification.driver.profile.gender.toLowerCase(),
-    //     })
+        if (verification.driverLicenseVerified) {
+            throw new ConflictException("Driver's License has already been verified")
+        }
 
-    //     const expiry_date = data.drivers_license.expiry_date
-    //     const [day, month, year] = expiry_date.split("-")
-    //     const expiryDate = new Date(`${year}-${month}-${day}`)
+        const data = await this.qoreid.driversLicense({ idNumber: licenseNumber }, {
+            email: verification.driver.email,
+            phone: verification.driver.phone,
+            lastname: verification.driver.lastname,
+            firstname: verification.driver.firstname,
+            dob: Utils.formatDate(new Date(dob), 'YYYY-MM-DD'),
+            gender: verification.driver.profile.gender.toLowerCase(),
+        })
 
-    //     if (new Date() > expiryDate) {
-    //         return this.response.sendError(res, StatusCodes.Forbidden, "Driver's License has expired")
-    //     }
+        const expiry_date = data.drivers_license?.expiry_date
+        if (expiry_date) {
+            const [day, month, year] = expiry_date.split("-")
+            const expiryDate = new Date(`${year}-${month}-${day}`)
 
-    //     const tailoredData = {
-    //         firstname: data.drivers_license.firstname,
-    //         lastname: data.drivers_license.lastname,
-    //         state_of_issue: data.drivers_license.state_of_issue,
-    //         issued_date: data.drivers_license.issued_date,
-    //         expiry_date: data.drivers_license.expiry_date
-    //     }
+            if (new Date() > expiryDate) {
+                throw new ForbiddenException("Driver's License has expired")
+            }
+        }
 
-    //     let newVerification: {
-    //         id: string
-    //         driverLicense: string
-    //         driverLicenseData: Prisma.JsonValue
-    //         driverLicenseVerified: boolean
-    //         driverId: string
-    //     }
+        const tailoredData = {
+            firstname: data.drivers_license.firstname,
+            lastname: data.drivers_license.lastname,
+            state_of_issue: data.drivers_license.state_of_issue,
+            issued_date: data.drivers_license.issued_date,
+            expiry_date: data.drivers_license.expiry_date
+        }
 
-    //     if (data && data.summary.drivers_license_check.status === "EXACT_MATCH") {
-    //         newVerification = await this.prisma.verification.update({
-    //             where: { driverId: sub },
-    //             data: {
-    //                 driverLicense: licenseNumber,
-    //                 driverLicenseVerified: true,
-    //                 driverLicenseData: tailoredData,
-    //             },
-    //             select: {
-    //                 id: true,
-    //                 driverId: true,
-    //                 driverLicense: true,
-    //                 driverLicenseData: true,
-    //                 driverLicenseVerified: true,
-    //             }
-    //         })
-    //     } else {
-    //         return this.response.sendError(res, StatusCodes.BadRequest, "Invalid ID type")
-    //     }
+        if (data && data.summary.drivers_license_check.status !== "EXACT_MATCH") {
+            throw new ForbiddenException("ID not match")
+        }
 
-    //     this.response.sendSuccess(res, StatusCodes.OK, { data: newVerification })
-    // }
+        return await this.prisma.verification.update({
+            where: { driverId: sub },
+            data: {
+                driverLicense: licenseNumber,
+                driverLicenseVerified: true,
+                driverLicenseData: tailoredData,
+            },
+            select: {
+                id: true,
+                driverId: true,
+                driverLicense: true,
+                driverLicenseData: true,
+                driverLicenseVerified: true,
+            }
+        })
+    }
 
-    // async uploadProofOfAddress(
-    //     res: Response,
-    //     { sub }: ExpressUser,
-    //     file: Express.Multer.File,
-    // ) {
-    //     if (!file) {
-    //         return this.response.sendError(res, StatusCodes.BadRequest, "File not found")
-    //     }
+    async uploadProofOfAddress({ sub }: JwtDecoded, file: Express.Multer.File) {
+        if (!file) {
+            throw new BadRequestException("File not found")
+        }
 
-    //     const fileValidation = validateFile(file, 10 << 20, 'jpg', 'jpeg', 'png')
-    //     if (fileValidation?.status) {
-    //         return this.response.sendError(res, fileValidation.status, fileValidation.message)
-    //     }
+        const fileValidation = validateFile(file, 10 << 20, 'jpg', 'jpeg', 'png')
+        if (fileValidation?.status) {
+            throw new HttpException(fileValidation.message, fileValidation.status)
+        }
 
-    //     const { public_id, secure_url } = await this.cloudinary.upload(fileValidation.file, {
-    //         folder: 'RideShare/Verification',
-    //         resource_type: 'image'
-    //     })
+        const { public_id, secure_url } = await this.cloudinary.upload(fileValidation.file, {
+            folder: 'RideShare/Verification',
+            resource_type: 'image'
+        })
 
-    //     const data = {
-    //         size: file.size,
-    //         url: secure_url,
-    //         type: file.mimetype,
-    //         public_id: public_id,
-    //     }
+        const data = {
+            size: file.size,
+            url: secure_url,
+            type: file.mimetype,
+            public_id: public_id,
+        }
 
-    //     const verification = await this.prisma.verification.update({
-    //         where: { driverId: sub },
-    //         data: {
-    //             proofOfAddress: data,
-    //             addressVerified: true,
-    //         },
-    //         select: {
-    //             driverId: true,
-    //             proofOfAddress: true,
-    //             addressVerified: true,
-    //         }
-    //     })
+        return await this.prisma.verification.update({
+            where: { driverId: sub },
+            data: {
+                proofOfAddress: data,
+                addressVerified: true,
+            },
+            select: {
+                driverId: true,
+                proofOfAddress: true,
+                addressVerified: true,
+            }
+        })
+    }
 
-    //     this.response.sendSuccess(res, StatusCodes.OK, { data: verification })
-    // }
+    async addVehicle(
+        { sub }: JwtDecoded,
+        {
+            description,
+            year,
+            color,
+            seatNumber,
+            plateNumber,
+            isOwner,
+            ownerName,
+            ownerPhoneNo,
+            wifi,
+            music,
+            phoneCharger,
+            temperatureControl,
+        }: VehicleDTO,
+        file: Express.Multer.File,
+    ) {
+        if (!isOwner && !file) {
+            throw new BadRequestException("Agreement document is required")
+        }
 
-    // async addVehicle(
-    //     res: Response,
-    //     { sub }: ExpressUser,
-    //     {
-    //         brand,
-    //         model,
-    //         classification,
-    //         year,
-    //         color,
-    //         seatNumber,
-    //         vin,
-    //         plateNumber,
-    //         isOwner,
-    //         ownerName,
-    //         ownerPhoneNumber,
-    //         wifi,
-    //         music,
-    //         phoneCharger,
-    //         temperatureControl,
-    //     }: VehicleDTO,
-    //     file: Express.Multer.File,
-    // ) {
-    //     if (!isOwner && !file) {
-    //         return this.response.sendError(res, StatusCodes.BadRequest, "Agreement document is required")
-    //     }
+        const vehicleExist = await this.prisma.vehicle.findFirst({
+            where: { plateNumber }
+        })
 
-    //     const vehicleExist = await this.prisma.vehicle.findFirst({
-    //         where: {
-    //             OR: [
-    //                 { vin: { equals: vin } },
-    //                 { plateNumber: { equals: plateNumber } },
-    //             ]
-    //         }
-    //     })
+        if (vehicleExist) {
+            throw new ConflictException("Existing vehicle")
+        }
 
-    //     if (vehicleExist) {
-    //         return this.response.sendError(res, StatusCodes.Conflict, "Existing vehicle")
-    //     }
+        const verification = await this.prisma.verification.findUnique({
+            where: { driverId: sub },
+            include: {
+                driver: {
+                    select: {
+                        lastname: true,
+                        firstname: true,
+                    }
+                }
+            }
+        })
 
-    //     const verification = await this.prisma.verification.findUnique({
-    //         where: { driverId: sub },
-    //         include: {
-    //             driver: {
-    //                 select: {
-    //                     firstname: true,
-    //                     lastname: true,
-    //                     profile: {
-    //                         select: { email_verified: true }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     })
+        if (!verification) {
+            throw new BadRequestException("Verification is required")
+        }
 
-    //     if (!verification) {
-    //         return this.response.sendError(res, StatusCodes.Forbidden, "Profile verification is required")
-    //     }
+        if (!verification.driverLicenseVerified) {
+            throw new UnauthorizedException("Verify your Driver's License")
+        }
 
-    //     if (!verification.driver.profile.email_verified) {
-    //         return this.response.sendError(res, StatusCodes.Unauthorized, "Verify your email")
-    //     }
+        const { verified, metadata } = await this.verifyVehicleOwner(plateNumber, verification.driver.firstname, verification.driver.lastname)
 
-    //     if (!verification.driverLicenseVerified) {
-    //         return this.response.sendError(res, StatusCodes.Unauthorized, "Verify your Driver's License")
-    //     }
+        if (isOwner && !verified) {
+            throw new UnauthorizedException("Invalid credentials")
+        }
 
-    //     if (isOwner) {
-    //         const { verified } = await this.verifyVehicleOwner(plateNumber, verification.driver.firstname, verification.driver.lastname)
+        let isNotOwnerdata = {} as {
+            agreement: Attachment
+            phoneNoData: {
+                regionCode: string
+                countryCode: string
+                significant: string
+            }
+        }
 
-    //         if (!verified) {
-    //             return this.response.sendError(res, StatusCodes.Unauthorized, "Invalid credentials")
-    //         }
-    //     }
+        if (!isOwner) {
+            const phoneNoData = Utils.normalizePhoneNumber(ownerPhoneNo)
 
-    //     let agreement: Attachment
+            const fileValidation = validateFile(file, 10 << 20, 'jpg', 'jpeg', 'png')
+            if (fileValidation?.status) {
+                throw new HttpException(fileValidation.message, fileValidation.status)
+            }
 
-    //     if (!isOwner) {
-    //         ownerPhoneNumber = normalizePhoneNumber(ownerPhoneNumber)
+            const { public_id, secure_url } = await this.cloudinary.upload(fileValidation.file, {
+                folder: 'RideShare/Vehicle',
+                resource_type: 'image'
+            })
 
-    //         const fileValidation = validateFile(file, 10 << 20, 'jpg', 'jpeg', 'png')
-    //         if (fileValidation?.status) {
-    //             return this.response.sendError(res, fileValidation.status, fileValidation.message)
-    //         }
+            isNotOwnerdata = {
+                agreement: {
+                    size: file.size,
+                    url: secure_url,
+                    type: file.mimetype,
+                    public_id: public_id,
+                },
+                phoneNoData,
+            }
+        }
 
-    //         const { public_id, secure_url } = await this.cloudinary.upload(fileValidation.file, {
-    //             folder: 'RideShare/Vehicle',
-    //             resource_type: 'image'
-    //         })
+        return await this.prisma.vehicle.create({
+            data: {
+                year,
+                color,
+                isOwner,
+                metadata,
+                ownerName,
+                seatNumber,
+                plateNumber,
+                description,
+                ownerPhoneNo,
+                make: metadata.vehicleMake,
+                model: metadata.vehicleModel,
+                verified: isOwner ? true : false,
+                category: metadata.vehicleCategory,
+                ownerPhoneNoProperty: isNotOwnerdata?.phoneNoData,
+                agreementDocument: isNotOwnerdata?.agreement as unknown as Prisma.JsonValue,
+                amenity: {
+                    create: {
+                        wifi, music,
+                        phoneCharger,
+                        temperatureControl,
+                    }
+                },
+                driver: { connect: { id: sub } }
+            },
+            include: { amenity: true }
+        })
+    }
 
-    //         agreement = {
-    //             size: file.size,
-    //             url: secure_url,
-    //             type: file.mimetype,
-    //             public_id: public_id,
-    //         }
-    //     }
+    async updateVehicle(
+        { sub }: JwtDecoded,
+        vehicleId: string,
+        {
+            year,
+            color,
+            wifi,
+            music,
+            seatNumber,
+            description,
+            phoneCharger,
+            temperatureControl,
+        }: UpdateVehicleDTO,
+    ) {
+        const vehicle = await this.prisma.vehicle.findUnique({
+            where: { id: vehicleId, driverId: sub },
+            include: {
+                amenity: true,
+                driver: {
+                    select: {
+                        lastname: true,
+                        firstname: true,
+                    }
+                }
+            }
+        })
 
-    //     const vehicle = await this.prisma.vehicle.create({
-    //         data: {
-    //             brand,
-    //             model,
-    //             classification,
-    //             year,
-    //             color,
-    //             seatNumber,
-    //             vin,
-    //             plateNumber,
-    //             isOwner,
-    //             ownerName,
-    //             ownerPhoneNumber,
-    //             verified: isOwner ? true : false,
-    //             agreementDocument: agreement as unknown as Prisma.JsonValue,
-    //             amenity: {
-    //                 create: {
-    //                     wifi,
-    //                     music,
-    //                     phoneCharger,
-    //                     temperatureControl,
-    //                 }
-    //             },
-    //             driver: { connect: { id: sub } }
-    //         }
-    //     })
+        if (!vehicle) {
+            throw new NotFoundException("Vehicle not found")
+        }
 
-    //     this.response.sendSuccess(res, StatusCodes.OK, { data: vehicle })
-    // }
+        return await this.prisma.vehicle.update({
+            where: { id: vehicleId },
+            data: {
+                year,
+                color,
+                seatNumber,
+                description,
+                amenity: {
+                    update: {
+                        wifi,
+                        music,
+                        phoneCharger,
+                        temperatureControl,
+                    }
+                },
+            },
+            include: { amenity: true }
+        })
+    }
 
-    // async updateVehicle(
-    //     res: Response,
-    //     { sub }: ExpressUser,
-    //     vehicleId: string,
-    //     {
-    //         brand,
-    //         model,
-    //         classification,
-    //         year,
-    //         color,
-    //         seatNumber,
-    //         vin,
-    //         plateNumber,
-    //         isOwner,
-    //         ownerName,
-    //         ownerPhoneNumber,
-    //         wifi,
-    //         music,
-    //         phoneCharger,
-    //         temperatureControl,
-    //     }: UpdateVehicleDTO,
-    //     file?: Express.Multer.File,
-    // ) {
-    //     const vehicle = await this.prisma.vehicle.findUnique({
-    //         where: { id: vehicleId, driverId: sub },
-    //         include: {
-    //             amenity: true,
-    //             driver: {
-    //                 select: {
-    //                     lastname: true,
-    //                     firstname: true,
-    //                 }
-    //             }
-    //         }
-    //     })
+    async deleteVehicle({ sub, role }: JwtDecoded, vehicleId: string) {
+        const vehicle = await this.prisma.vehicle.findUnique({
+            where: role === "DRIVER" ? {
+                id: vehicleId,
+                driverId: sub
+            } : { id: vehicleId },
+            include: {
+                amenity: true,
+                driver: {
+                    select: { email: true }
+                }
+            }
+        })
 
-    //     if (!vehicle) {
-    //         return this.response.sendError(res, StatusCodes.NotFound, "Vehicle not found")
-    //     }
+        if (!vehicle) {
+            throw new NotFoundException("Vehicle not found")
+        }
 
-    //     if ((vehicle.isOwner || isOwner) && plateNumber) {
-    //         const { verified } = await this.verifyVehicleOwner(plateNumber, vehicle.driver.firstname, vehicle.driver.lastname)
+        await this.prisma.$transaction([
+            this.prisma.vehicle.delete({
+                where: { id: vehicleId },
+            }),
+            this.prisma.amenity.delete({
+                where: { vehicleId }
+            })
+        ])
 
-    //         if (!verified) {
-    //             return this.response.sendError(res, StatusCodes.Unauthorized, "Invalid credentials")
-    //         }
-    //     }
+        if (!vehicle.isOwner && vehicle.agreementDocument) {
+            // @ts-ignore
+            await this.cloudinary.delete(vehicle.agreementDocument.public_id)
+        }
 
-    //     let agreement: Attachment
+        if (role !== "DRIVER") {
+            this.event.emit(
+                'notification.email',
+                new CreateEmailNotificationEvent({
+                    emails: vehicle.driver.email,
+                    template: 'VehicleRemoved',
+                    subject: 'Vehicle Removed',
+                    data: {
 
-    //     if (!isOwner) {
-    //         if (!file && !vehicle.agreementDocument) {
-    //             return this.response.sendError(res, StatusCodes.BadRequest, "Agreement document is required")
-    //         }
-
-    //         if (file) {
-    //             ownerPhoneNumber = normalizePhoneNumber(ownerPhoneNumber)
-
-    //             const fileValidation = validateFile(file, 10 << 20, 'jpg', 'jpeg', 'png')
-    //             if (fileValidation?.status) {
-    //                 return this.response.sendError(res, fileValidation.status, fileValidation.message)
-    //             }
-
-    //             if (vehicle.agreementDocument) {
-    //                 // @ts-ignore
-    //                 await this.cloudinary.delete(vehicle.agreementDocument.public_id)
-    //             }
-
-    //             const { public_id, secure_url } = await this.cloudinary.upload(fileValidation.file, {
-    //                 folder: 'RideShare/Vehicle',
-    //                 resource_type: 'image'
-    //             })
-
-    //             agreement = {
-    //                 size: file.size,
-    //                 url: secure_url,
-    //                 type: file.mimetype,
-    //                 public_id: public_id,
-    //             }
-    //         }
-    //     }
-
-    //     const updatedVehicle = await this.prisma.vehicle.update({
-    //         where: { id: vehicleId },
-    //         data: {
-    //             brand,
-    //             model,
-    //             classification,
-    //             year,
-    //             color,
-    //             seatNumber,
-    //             vin,
-    //             plateNumber,
-    //             isOwner,
-    //             ownerName,
-    //             ownerPhoneNumber,
-    //             agreementDocument: agreement ? (agreement as unknown as Prisma.JsonValue) : vehicle.agreementDocument,
-    //             amenity: {
-    //                 update: {
-    //                     wifi,
-    //                     music,
-    //                     phoneCharger,
-    //                     temperatureControl,
-    //                 }
-    //             },
-    //         }
-    //     })
-
-    //     this.response.sendSuccess(res, StatusCodes.OK, { data: updatedVehicle })
-    // }
-
-    // async deleteVehicle(
-    //     res: Response,
-    //     { sub, role }: ExpressUser,
-    //     vehicleId: string,
-    // ) {
-    //     try {
-    //         const vehicle = await this.prisma.vehicle.findUnique({
-    //             where: role === "DRIVER" ? {
-    //                 id: vehicleId,
-    //                 driverId: sub
-    //             } : { id: vehicleId },
-    //             include: { amenity: true }
-    //         })
-
-    //         if (!vehicle) {
-    //             return this.response.sendError(res, StatusCodes.NotFound, "Vehicle not found")
-    //         }
-
-    //         if (!vehicle.isOwner && vehicle.agreementDocument) {
-    //             // @ts-ignore
-    //             await this.cloudinary.delete(vehicle.agreementDocument.public_id)
-    //         }
-
-    //         const [deletedVehicle, amenity] = await this.prisma.$transaction([
-    //             this.prisma.vehicle.delete({
-    //                 where: { id: vehicleId },
-    //             }),
-    //             this.prisma.amenity.delete({
-    //                 where: { vehicleId }
-    //             })
-    //         ])
-
-    //         this.response.sendSuccess(res, StatusCodes.OK, {
-    //             data: { ...deletedVehicle, amenity },
-    //             message: "Vehicle deleted successfully",
-    //         })
-    //     } catch (err) {
-    //         this.misc.handleServerError(res, err)
-    //     }
-    // }
+                    }
+                })
+            )
+        }
+    }
 }

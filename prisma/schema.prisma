@@ -133,30 +133,31 @@ model EmergencyContact {
 }
 
 model Vehicle {
-  id                String   @id @default(uuid()) @db.Uuid
-  brand             String
-  model             String
-  classification    String
-  year              String?
-  imageUrl          String?  @map("image_url")
-  color             String
-  seatNumber        Int      @map("seat_number")
-  vin               String?  @unique
-  plateNumber       String   @unique @map("plate_number")
-  isOwner           Boolean  @map("is_ownwer")
-  agreementDocument Json?    @map("agreement_document")
-  ownerName         String?  @map("owner_name")
-  ownerPhoneNumber  String?  @map("owner_phone_number")
-  verified          Boolean  @default(false)
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                   String   @id @default(uuid()) @db.Uuid
+  make                 String
+  model                String
+  description          String?
+  year                 String?
+  imageUrl             String?  @map("image_url")
+  color                String?
+  seatNumber           Int      @map("seat_number")
+  plateNumber          String   @unique @map("plate_number")
+  isOwner              Boolean  @map("is_ownwer")
+  agreementDocument    Json?    @map("agreement_document")
+  ownerName            String?  @map("owner_name")
+  ownerPhoneNo         String?  @map("owner_phone_number")
+  ownerPhoneNoProperty Json?    @map("owner_phone_number_data")
+  verified             Boolean  @default(false)
+  category             String
+  metadata             Json?
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   amenity Amenity?
 
   driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
   driverId String @map("driver_id") @db.Uuid
 
-  @@index([brand, model])
   @@index([createdAt, updatedAt])
   @@map("vehicles")
 }
@@ -478,8 +479,8 @@ enum IDType {
 
 enum NotificationType {
   GENERAL
-  WEBHOOK
-  ACTIVITY
-  TRANSACTION
-  ANNOUNCEMENT
+  WEBHOOKS
+  ACTIVITIES
+  TRANSACTIONS
+  ANNOUNCEMENTS
 }

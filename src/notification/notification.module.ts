@@ -23,9 +23,6 @@ import { NotificationListener } from './notification.listener'
                     pass: config.google.emailPassword,
                 },
             },
-            defaults: {
-                from: `No Reply`,
-            },
         }),
     ],
     providers: [

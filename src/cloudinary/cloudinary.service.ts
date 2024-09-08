@@ -3,10 +3,13 @@ import {
     UploadApiResponse,
     UploadApiErrorResponse,
 } from 'cloudinary'
+import {
+    Injectable,
+    InternalServerErrorException
+} from '@nestjs/common'
 import { genFileName } from 'utils/file'
 import toStream = require('buffer-to-stream')
 import { ConfigService } from '@nestjs/config'
-import { Injectable, InternalServerErrorException } from '@nestjs/common'
 
 @Injectable()
 export class CloudinaryService {
