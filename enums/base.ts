@@ -38,9 +38,11 @@ export enum Chart {
     weekdays = "weekdays",
 }
 
-export enum DaysToMilli {
-    "1d" = 24 * 60 * 60 * 1000,
-    "30d" = 30 * 24 * 60 * 60 * 1000,
-    "60d" = 60 * 24 * 60 * 60 * 1000,
-    "120d" = 120 * 24 * 60 * 60 * 1000,
+export enum TimeToMilli {
+    OneHour = 60 * 60 * 1000,
+    TenMinutes = 10 * 60 * 1000,
+    OneDay = 24 * 60 * 60 * 1000,
+    ThirtyDays = 30 * 24 * 60 * 60 * 1000,
+    SixtyDays = 60 * 24 * 60 * 60 * 1000,
+    OneHundredTwentyDays = 120 * 24 * 60 * 60 * 1000,
 }

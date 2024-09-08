@@ -25,7 +25,6 @@ model User {
   updatedAt           DateTime  @updatedAt @map("updated_at")
   lastUsedBiometricAt DateTime? @map("last_used_biometric_at")
 
-  totp         Totp?
   inbox        Inbox?
   wallet       Wallet?
   profile      Profile?
@@ -218,24 +217,6 @@ model Notification {
   @@index([topic])
   @@index([createdAt, updatedAt])
   @@map("notifications")
-}
-
-model Totp {
-  id          String    @id @default(uuid()) @db.Uuid
-  key         String?   @unique
-  totp        String?
-  totp_expiry DateTime?
-  counter     Int?
-  max         Int?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  user   User?   @relation(references: [id], fields: [userId], onDelete: Cascade)
-  userId String? @unique @map("user_id") @db.Uuid
-
-  @@index([createdAt, updatedAt])
-  @@index([totp])
-  @@map("otps")
 }
 
 model TxHistory {

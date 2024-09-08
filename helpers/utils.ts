@@ -1,6 +1,7 @@
+import { config } from 'configs/env.config'
 import { BadRequestException } from '@nestjs/common'
 import { parsePhoneNumber } from 'awesome-phonenumber'
-import { config } from 'configs/env.config'
+
 const { isValidPhoneNumber } = require('libphonenumber-js')
 
 export class Utils {
@@ -122,12 +123,16 @@ export class Utils {
             now.setMinutes(now.getMinutes() + 10)
         )
 
-        let payload = { totp_expiry } as IGenOTP
+        let payload = {
+            totp_expiry,
+            count: 0,
+            max: 3
+        } as IGenOTP
 
         if (config.env === 'live') {
-            payload.totp = this.generateRandomDigits(length)
+            payload.otp = this.generateRandomDigits(length)
         } else {
-            payload.totp = '0'.repeat(length)
+            payload.otp = '0'.repeat(length)
         }
 
         return payload

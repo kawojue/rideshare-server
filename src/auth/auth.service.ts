@@ -18,7 +18,7 @@ import { Queue } from 'bullmq'
 import { Utils } from 'helpers/utils'
 import { UAParser } from 'ua-parser-js'
 import { JwtService } from '@nestjs/jwt'
-import { DaysToMilli } from 'enums/base'
+import { TimeToMilli } from 'enums/base'
 import { validateFile } from 'utils/file'
 import { Request, Response } from 'express'
 import { config } from 'configs/env.config'
@@ -82,14 +82,14 @@ export class AuthService {
         res.cookie('access_token', data.access_token, {
             sameSite: config.isProd ? 'none' : 'lax',
             secure: config.isProd,
-            maxAge: DaysToMilli['1d']
+            maxAge: TimeToMilli.OneDay
         })
 
         res.cookie('refresh_token', data.refresh_token, {
             httpOnly: true,
             sameSite: config.isProd ? 'none' : 'lax',
             secure: config.isProd,
-            maxAge: DaysToMilli['120d']
+            maxAge: TimeToMilli.OneHundredTwentyDays
         })
     }
 
@@ -169,7 +169,7 @@ export class AuthService {
 
     async sendOtp({ identifier }: SigninDTO) {
         const isPhone = !isEmail(identifier)
-        const { totp, totp_expiry } = Utils.generateOTP(4)
+        const totp = Utils.generateOTP(4)
 
         if (isPhone) {
             Utils.normalizePhoneNumber(identifier)
@@ -196,7 +196,7 @@ export class AuthService {
                     'notification.sms',
                     new CreateSmsNotificationEvent({
                         phone: identifier,
-                        message: `OTP Code <${totp}>. Rideshare`
+                        message: `OTP Code <${totp.otp}>. Rideshare`
                     })
                 )
             }
@@ -216,17 +216,11 @@ export class AuthService {
         }
 
         if (emitted) {
-            await this.prisma.totp.upsert({
-                where: { key: identifier },
-                create: {
-                    totp,
-                    max: 3,
-                    counter: 0,
-                    totp_expiry,
-                    key: identifier,
-                },
-                update: { totp, totp_expiry }
-            })
+            await this.store.set<IGenOTP>(
+                `totp_${identifier}`,
+                totp,
+                TimeToMilli.TenMinutes
+            )
         }
 
         return {
@@ -249,35 +243,29 @@ export class AuthService {
             phoneData = { countryCode, regionCode, significant }
         }
 
-        const totp = await this.prisma.totp.findUnique({
-            where: { key: identifier }
-        })
+        const totp = await this.store.get<IGenOTP>(`totp_${identifier}`)
 
         if (!totp) {
             throw new UnauthorizedException("Invalid OTP")
         }
 
-        if (new Date() > totp.totp_expiry) {
-            await this.prisma.totp.delete({
-                where: { key: identifier }
-            })
+        if (new Date() > totp.otp_expiry) {
+            await this.store.delete(`totp_${identifier}`)
             throw new ForbiddenException("Code has expired")
         }
 
-        if (otp !== totp.totp) {
-            const throttler = await this.prisma.totp.update({
-                where: { key: identifier },
-                data: {
-                    counter: { increment: 1 }
-                }
-            })
+        if (otp !== totp.otp) {
+            const newCount = (totp.count || 0) + 1
 
-            if (throttler.counter >= totp.max) {
-                await this.prisma.totp.delete({
-                    where: { key: identifier },
-                })
-                throw new UnauthorizedException("Incorrect OTP. Max Retries reached.")
+            if (newCount >= totp.max) {
+                await this.store.delete(`totp_${identifier}`)
+                throw new UnauthorizedException("Incorrect OTP. Max retries reached.")
             }
+
+            await this.store.set<IGenOTP>(`totp_${identifier}`, {
+                ...totp,
+                count: newCount
+            })
 
             throw new UnauthorizedException("Incorrect OTP")
         }

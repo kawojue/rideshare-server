@@ -13,8 +13,10 @@ interface FileDest {
 }
 
 interface IGenOTP {
-    totp: string
-    totp_expiry: Date
+    max?: number
+    count?: number
+    otp?: string
+    otp_expiry?: Date
 }
 
 interface ExpressUser extends Express.User {
