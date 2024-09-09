@@ -9,7 +9,7 @@ import { ApiModule } from 'src/api/api.module'
 import { MiscService } from 'libs/misc.service'
 import { AppController } from './app.controller'
 import { AuthModule } from 'src/auth/auth.module'
-import { UserModule } from 'src/user/user.module'
+import { UsersModule } from 'src/users/users.module'
 import { QueueModule } from 'src/queue/queue.module'
 import { StoreModule } from 'src/store/store.module'
 import { PrismaService } from 'prisma/prisma.service'
@@ -27,8 +27,8 @@ import { NotificationModule } from 'src/notification/notification.module'
   imports: [
     ApiModule,
     AuthModule,
-    UserModule,
     HttpModule,
+    UsersModule,
     QueueModule,
     StoreModule,
     DriverModule,

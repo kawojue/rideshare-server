@@ -39,15 +39,17 @@ export class JwtRoleAuthGuard extends AuthGuard('jwt') {
         if (!access_token) return false
 
         try {
-            const decoded = await this.jwtService.verifyAsync(access_token, {
+            const decoded: JwtDecoded = await this.jwtService.verifyAsync(access_token, {
                 secret: config.jwt.secret,
                 ignoreExpiration: false,
             })
 
-            const userOrAdmin = await (this.prisma[
-                (decoded.role === 'ADMIN' || decoded.role === 'MODERATOR') ? 'modmin' : 'user'
-            ] as any).findFirst({
-                where: { id: decoded.sub, status: decoded.status },
+            const SUPERIOR = decoded.role === 'ADMIN' || decoded.role === 'MODERATOR'
+            const userOrAdmin = await (this.prisma[SUPERIOR ? 'modmin' : 'user'] as any).findFirst({
+                where: {
+                    id: decoded.sub,
+                    status: decoded.status
+                },
             })
 
             if (!userOrAdmin) {

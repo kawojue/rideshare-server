@@ -1,6 +1,7 @@
+import { v4 as uuid } from "uuid"
 import { ApiProperty } from "@nestjs/swagger"
 import { Transform } from "class-transformer"
-import { IsEnum, IsOptional } from "class-validator"
+import { IsEnum, IsOptional, IsString } from "class-validator"
 import { PayoutStatus, TransferStatus, TxType } from "@prisma/client"
 import { SortUsers, UserEnum, SortWithdrawalRequests } from "enums/base"
 
@@ -25,8 +26,8 @@ export class SearchBaseDTO {
         example: ' ',
         required: false,
     })
-    @Transform(({ value }) => value?.trim())
     @IsOptional()
+    @Transform(({ value }) => value?.trim())
     search?: string
 }
 
@@ -130,7 +131,7 @@ export class FetchWithdrawalRequestsDTO extends AmountBaseDTO {
     status?: PayoutStatus
 }
 
-export class FetchTxHistoryDTO extends AmountBaseDTO {
+export class FetchTxHistoriesDTO extends AmountBaseDTO {
     @ApiProperty({
         enum: TransferStatus,
         required: false,
@@ -138,6 +139,14 @@ export class FetchTxHistoryDTO extends AmountBaseDTO {
     @IsOptional()
     @IsEnum(TransferStatus)
     status?: TransferStatus
+
+    @ApiProperty({
+        example: uuid(),
+        required: false,
+    })
+    @IsString()
+    @IsOptional()
+    reference?: string
 
     @ApiProperty({
         enum: TxType,

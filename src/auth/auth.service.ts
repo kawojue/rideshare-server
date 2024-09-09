@@ -117,6 +117,7 @@ export class AuthService {
                     email: true,
                     phone: true,
                     status: true,
+                    providerId: true,
                     profile: {
                         select: {
                             avatar: true,
@@ -144,6 +145,13 @@ export class AuthService {
                 role: user.role,
                 status: user.status,
                 deviceId: mobileDevice.deviceId
+            }
+
+            if (!user.providerId) {
+                await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: { providerId: payload.sub }
+                })
             }
 
             const [access_token, refresh_token] = await Promise.all([
@@ -420,6 +428,11 @@ export class AuthService {
         if (user && user.status === "SUSPENDED") {
             throw new ForbiddenException("Account suspended. Contact Support!")
         }
+
+        await this.prisma.user.update({
+            where: { id: user.id },
+            data: { lastUsedBiometricAt: new Date() }
+        })
 
         const access_token = await this.misc.generateAccessToken(decoded)
 

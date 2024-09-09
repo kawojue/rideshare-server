@@ -8,7 +8,7 @@ import {
 
 export class RatingDTO {
     @ApiProperty({
-        example: 'Well, and calm person'
+        example: 'He almost kidnapped me!!!'
     })
     @IsString()
     @IsNotEmpty()

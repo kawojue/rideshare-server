@@ -1,6 +1,7 @@
 import { config } from 'configs/env.config'
 import { BadRequestException } from '@nestjs/common'
 import { parsePhoneNumber } from 'awesome-phonenumber'
+import { Prisma, PrismaClient } from '@prisma/client'
 
 const { isValidPhoneNumber } = require('libphonenumber-js')
 
@@ -155,5 +156,21 @@ export class Utils {
 
     static replaceSpaces(text: string, delimiter: string = "") {
         return text.replace(/\s+/g, delimiter)
+    }
+
+    static async getTotalRating(prisma: PrismaClient, userId: string) {
+        const ratings = await prisma.rating.findMany({
+            where: { targetUserId: userId },
+            select: { point: true }
+        })
+
+        if (ratings.length === 0) return 0
+
+        const totalRating = ratings.reduce((sum, rating) => sum + rating.point, 0)
+        const averageRating = totalRating / ratings.length
+
+        const scaledRating = (averageRating / 5) * 4 + 1
+
+        return scaledRating
     }
 }
