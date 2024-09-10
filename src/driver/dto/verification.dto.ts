@@ -4,8 +4,11 @@ import {
     IsNotEmpty,
     IsOptional,
 } from "class-validator"
+import {
+    ApiProperty,
+    ApiPropertyOptional
+} from "@nestjs/swagger"
 import { IDType } from "@prisma/client"
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
 
 export class IDVerificationDTO {
     @ApiProperty({

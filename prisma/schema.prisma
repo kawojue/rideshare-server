@@ -12,7 +12,7 @@ model User {
   firstname           String
   lastname            String
   middlename          String?
-  customerCode        String?       @map("customer_code")
+  customerCode        String?       @unique @map("customer_code")
   status              AccountStatus @default(ACTIVE)
   email               String?       @unique
   phone               String?       @unique
@@ -227,11 +227,10 @@ model TxHistory {
   amount                   Decimal        @default(0.00) @db.Decimal(10, 2)
   type                     TxType
   description              String?
-  channel                  String?
   reference                String         @unique
-  transfer_code            String?
-  recipient_code           String?
-  authorization_code       String?
+  transferCode             String?        @map("transfer_code")
+  recipientCode            String?        @map("recipient_code")
+  authorization            Json?
   totalFee                 Decimal        @default(0.00) @map("total_fee") @db.Decimal(10, 2)
   paystackFee              Decimal        @default(0.00) @map("paystack_fee") @db.Decimal(10, 2)
   processingFee            Decimal        @default(0.00) @map("processing_fee") @db.Decimal(10, 2)
@@ -239,8 +238,8 @@ model TxHistory {
   destinationBankName      String?        @map("destination_bank_name")
   destinationAccountName   String?        @map("destination_account_name")
   destinationAccountNumber String?        @map("destination_account_number")
+  narration                String?
   paidAt                   DateTime?
-  reversed                 Boolean?
   createdAt                DateTime       @default(now()) @map("created_at")
   updatedAt                DateTime       @updatedAt @map("updated_at")
 
@@ -249,7 +248,7 @@ model TxHistory {
 
   @@index([status])
   @@index([createdAt, updatedAt])
-  @@map("tx_histories")
+  @@map("transaction_histories")
 }
 
 model Wallet {
@@ -323,7 +322,7 @@ model Modmin {
   @@index([status])
   @@index([fullname])
   @@index([createdAt, updatedAt])
-  @@map("modmins")
+  @@map("admins_and_moderators")
 }
 
 model Rating {

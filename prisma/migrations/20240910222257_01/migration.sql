@@ -8,13 +8,13 @@ CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE');
 CREATE TYPE "Provider" AS ENUM ('Local', 'Google');
 
 -- CreateEnum
-CREATE TYPE "Status" AS ENUM ('ACTIVE', 'SUSPENDED');
+CREATE TYPE "AccountStatus" AS ENUM ('ACTIVE', 'SUSPENDED');
 
 -- CreateEnum
 CREATE TYPE "TxType" AS ENUM ('DEPOSIT', 'PAYMENT', 'WITHDRAWAL');
 
 -- CreateEnum
-CREATE TYPE "CacheType" AS ENUM ('QOREID', 'TOKEN_REFRESHER');
+CREATE TYPE "CacheType" AS ENUM ('QOREID');
 
 -- CreateEnum
 CREATE TYPE "PayoutStatus" AS ENUM ('GRANTED', 'PENDING', 'DECLINED');
@@ -38,7 +38,7 @@ CREATE TABLE "users" (
     "lastname" TEXT NOT NULL,
     "middlename" TEXT,
     "customer_code" TEXT,
-    "status" "Status" NOT NULL DEFAULT 'ACTIVE',
+    "status" "AccountStatus" NOT NULL DEFAULT 'ACTIVE',
     "email" TEXT,
     "phone" TEXT,
     "significant" TEXT,
@@ -96,9 +96,10 @@ CREATE TABLE "verification" (
     "id_verification_data" JSONB,
     "driver_license" TEXT,
     "driver_license_data" JSONB,
-    "driver_license_verified" BOOLEAN DEFAULT false,
+    "driver_license_verified" BOOLEAN NOT NULL DEFAULT false,
     "proof_of_address" JSONB,
-    "address_verified" BOOLEAN DEFAULT false,
+    "landmark" TEXT,
+    "address_verified" BOOLEAN NOT NULL DEFAULT false,
     "driver_id" UUID NOT NULL,
 
     CONSTRAINT "verification_pkey" PRIMARY KEY ("id")
@@ -192,18 +193,17 @@ CREATE TABLE "notifications" (
 );
 
 -- CreateTable
-CREATE TABLE "tx_histories" (
+CREATE TABLE "transaction_histories" (
     "id" UUID NOT NULL,
     "ip" TEXT,
     "status" "TransferStatus" NOT NULL,
     "amount" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "type" "TxType" NOT NULL,
     "description" TEXT,
-    "channel" TEXT,
     "reference" TEXT NOT NULL,
     "transfer_code" TEXT,
     "recipient_code" TEXT,
-    "authorization_code" TEXT,
+    "authorization" JSONB,
     "total_fee" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "paystack_fee" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     "processing_fee" DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -211,11 +211,13 @@ CREATE TABLE "tx_histories" (
     "destination_bank_name" TEXT,
     "destination_account_name" TEXT,
     "destination_account_number" TEXT,
+    "narration" TEXT,
+    "paidAt" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "user_id" UUID NOT NULL,
 
-    CONSTRAINT "tx_histories_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "transaction_histories_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -246,26 +248,31 @@ CREATE TABLE "withdrawal_requests" (
     "amount" DECIMAL(10,2) NOT NULL,
     "locked" BOOLEAN NOT NULL DEFAULT false,
     "status" "PayoutStatus" NOT NULL DEFAULT 'PENDING',
+    "destination_bank_code" TEXT,
+    "destination_bank_name" TEXT,
+    "destination_account_name" TEXT,
+    "destination_account_number" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "wallet_id" UUID NOT NULL,
+    "modmin_id" UUID,
 
     CONSTRAINT "withdrawal_requests_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "modmins" (
+CREATE TABLE "admins_and_moderators" (
     "id" UUID NOT NULL,
     "fullname" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "avatar" TEXT,
     "password" TEXT NOT NULL,
     "role" "Role" NOT NULL,
-    "status" "Status" NOT NULL DEFAULT 'ACTIVE',
+    "status" "AccountStatus" NOT NULL DEFAULT 'ACTIVE',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "modmins_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "admins_and_moderators_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -322,6 +329,9 @@ CREATE TABLE "call_logs" (
 
     CONSTRAINT "call_logs_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_customer_code_key" ON "users"("customer_code");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
@@ -417,13 +427,13 @@ CREATE INDEX "notifications_topic_idx" ON "notifications"("topic");
 CREATE INDEX "notifications_created_at_updated_at_idx" ON "notifications"("created_at", "updated_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tx_histories_reference_key" ON "tx_histories"("reference");
+CREATE UNIQUE INDEX "transaction_histories_reference_key" ON "transaction_histories"("reference");
 
 -- CreateIndex
-CREATE INDEX "tx_histories_status_idx" ON "tx_histories"("status");
+CREATE INDEX "transaction_histories_status_idx" ON "transaction_histories"("status");
 
 -- CreateIndex
-CREATE INDEX "tx_histories_created_at_updated_at_idx" ON "tx_histories"("created_at", "updated_at");
+CREATE INDEX "transaction_histories_created_at_updated_at_idx" ON "transaction_histories"("created_at", "updated_at");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "wallets_user_id_key" ON "wallets"("user_id");
@@ -438,19 +448,19 @@ CREATE INDEX "withdrawal_requests_status_idx" ON "withdrawal_requests"("status")
 CREATE INDEX "withdrawal_requests_created_at_updated_at_idx" ON "withdrawal_requests"("created_at", "updated_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "modmins_email_key" ON "modmins"("email");
+CREATE UNIQUE INDEX "admins_and_moderators_email_key" ON "admins_and_moderators"("email");
 
 -- CreateIndex
-CREATE INDEX "modmins_role_idx" ON "modmins"("role");
+CREATE INDEX "admins_and_moderators_role_idx" ON "admins_and_moderators"("role");
 
 -- CreateIndex
-CREATE INDEX "modmins_status_idx" ON "modmins"("status");
+CREATE INDEX "admins_and_moderators_status_idx" ON "admins_and_moderators"("status");
 
 -- CreateIndex
-CREATE INDEX "modmins_fullname_idx" ON "modmins"("fullname");
+CREATE INDEX "admins_and_moderators_fullname_idx" ON "admins_and_moderators"("fullname");
 
 -- CreateIndex
-CREATE INDEX "modmins_created_at_updated_at_idx" ON "modmins"("created_at", "updated_at");
+CREATE INDEX "admins_and_moderators_created_at_updated_at_idx" ON "admins_and_moderators"("created_at", "updated_at");
 
 -- CreateIndex
 CREATE INDEX "ratings_point_idx" ON "ratings"("point");
@@ -498,13 +508,13 @@ ALTER TABLE "vehicle_amenities" ADD CONSTRAINT "vehicle_amenities_vehicle_id_fke
 ALTER TABLE "cache" ADD CONSTRAINT "cache_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "cache" ADD CONSTRAINT "cache_modmin_id_fkey" FOREIGN KEY ("modmin_id") REFERENCES "modmins"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "cache" ADD CONSTRAINT "cache_modmin_id_fkey" FOREIGN KEY ("modmin_id") REFERENCES "admins_and_moderators"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tx_histories" ADD CONSTRAINT "tx_histories_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "transaction_histories" ADD CONSTRAINT "transaction_histories_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "wallets" ADD CONSTRAINT "wallets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -513,13 +523,16 @@ ALTER TABLE "wallets" ADD CONSTRAINT "wallets_user_id_fkey" FOREIGN KEY ("user_i
 ALTER TABLE "withdrawal_requests" ADD CONSTRAINT "withdrawal_requests_wallet_id_fkey" FOREIGN KEY ("wallet_id") REFERENCES "wallets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "withdrawal_requests" ADD CONSTRAINT "withdrawal_requests_modmin_id_fkey" FOREIGN KEY ("modmin_id") REFERENCES "admins_and_moderators"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "ratings" ADD CONSTRAINT "ratings_target_user_id_fkey" FOREIGN KEY ("target_user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ratings" ADD CONSTRAINT "ratings_rater_user_id_fkey" FOREIGN KEY ("rater_user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "inboxes" ADD CONSTRAINT "inboxes_modmin_id_fkey" FOREIGN KEY ("modmin_id") REFERENCES "modmins"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "inboxes" ADD CONSTRAINT "inboxes_modmin_id_fkey" FOREIGN KEY ("modmin_id") REFERENCES "admins_and_moderators"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "inboxes" ADD CONSTRAINT "inboxes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -531,13 +544,13 @@ ALTER TABLE "messages" ADD CONSTRAINT "messages_inbox_id_fkey" FOREIGN KEY ("inb
 ALTER TABLE "messages" ADD CONSTRAINT "messages_user_sender_id_fkey" FOREIGN KEY ("user_sender_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "messages" ADD CONSTRAINT "messages_modmin_sender_id_fkey" FOREIGN KEY ("modmin_sender_id") REFERENCES "modmins"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "messages" ADD CONSTRAINT "messages_modmin_sender_id_fkey" FOREIGN KEY ("modmin_sender_id") REFERENCES "admins_and_moderators"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "messages" ADD CONSTRAINT "messages_user_receiver_id_fkey" FOREIGN KEY ("user_receiver_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "messages" ADD CONSTRAINT "messages_modmin_receiver_id_fkey" FOREIGN KEY ("modmin_receiver_id") REFERENCES "modmins"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "messages" ADD CONSTRAINT "messages_modmin_receiver_id_fkey" FOREIGN KEY ("modmin_receiver_id") REFERENCES "admins_and_moderators"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "call_logs" ADD CONSTRAINT "call_logs_caller_id_fkey" FOREIGN KEY ("caller_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

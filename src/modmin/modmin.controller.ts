@@ -1,6 +1,5 @@
 import {
   Get,
-  Req,
   Res,
   Post,
   Body,
@@ -16,20 +15,17 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger'
 import { Response } from 'express'
-import {
-  FetchModminsDTO,
-  FetchWithdrawalRequestsDTO
-} from 'src/app/dto/pagination.dto'
 import { Role } from '@prisma/client'
 import { avatars } from 'utils/avatars'
 import { Roles } from 'src/jwt/role.decorator'
 import { StatusCodes } from 'enums/statusCodes'
 import { ModminService } from './modmin.service'
 import { WithdrawalRequestDTO } from './dto/payout.dto'
-import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
-import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
 import { ResponseService } from 'libs/response.service'
+import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
 import { GetAuthParam } from 'src/jwt/auth-param.decorator'
+import { FetchModminsDTO, } from 'src/app/dto/pagination.dto'
+import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
 
 @ApiTags("Moderator & Admin")
 @Controller('modmins')
@@ -102,38 +98,33 @@ export class ModminController {
     return this.response.sendSuccess(res, StatusCodes.OK, { data })
   }
 
-  // @ApiBearerAuth()
-  // @UseGuards(JwtRoleAuthGuard)
-  // @Get('/withdrawal-requests')
-  // async fetchWithdrawalRequest(
-  //   @Res() res: Response,
-  //   @GetAuthParam() auth: JwtDecoded,
-  //   @Query() q: FetchWithdrawalRequestsDTO
-  // ) {
-  //   await this.modminService.fetchWithdrawalRequest(res, req.user, q)
-  // }
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN)
+  @Post('/withdrawal-requests/:requestId')
+  async withdrawalRequest(
+    @Res() res: Response,
+    @Query() q: WithdrawalRequestDTO,
+    @GetAuthParam() auth: JwtDecoded,
+    @Param('requestId') requestId: string
+  ) {
+    const data = await this.modminService.withdrawalRequest(requestId, auth, q)
 
-  // @ApiBearerAuth()
-  // @Roles(Role.ADMIN)
-  // @Post('/withdrawal-requests/:requestId')
-  // async withdrawalRequest(
-  //   @Res() res: Response,
-  //   @Query() q: WithdrawalRequestDTO,
-  //   @Param('requestId') requestId: string
-  // ) {
-  //   await this.modminService.withdrawalRequest(res, requestId, q)
-  // }
+    return this.response.sendSuccess(res, StatusCodes.OK, data)
+  }
 
-  // @ApiBearerAuth()
-  // @Roles(Role.ADMIN, Role.MODERATOR)
-  // @Post('/proof-of-address/:driverId/toggle')
-  // @ApiOperation({
-  //   summary: "This is to toggle Proof of Address verification"
-  // })
-  // async verifyProofOfAddress(
-  //   @Res() res: Response,
-  //   @Param('driverId') driverId: string
-  // ) {
-  //   await this.modminService.verifyProofOfAddress(res, driverId)
-  // }
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @Post('/proof-of-address/:driverId')
+  @ApiOperation({
+    summary: "This is to toggle Proof of Address verification"
+  })
+  async verifyProofOfAddress(
+    @Res() res: Response,
+    @Param('driverId') driverId: string,
+    @Body() body: WithdrawalRequestDTO,
+  ) {
+    const data = await this.modminService.verifyProofOfAddress(driverId, body)
+
+    return this.response.sendSuccess(res, StatusCodes.OK, data)
+  }
 }

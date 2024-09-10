@@ -5,15 +5,16 @@ import {
     ConflictException,
     BadRequestException,
 } from '@nestjs/common'
+import { Queue } from 'bullmq'
+import { Response } from 'express'
 import { Mutex } from 'async-mutex'
 import { Utils } from 'helpers/utils'
 import { TimeToMilli } from 'enums/base'
 import {
     CreatePushNotificationEvent,
-    CreateEmailNotificationEvent,
     CreateInAppNotificationEvent,
 } from 'src/notification/notification.event'
-import { Request, Response } from 'express'
+import { InjectQueue } from '@nestjs/bullmq'
 import { StatusCodes } from 'enums/statusCodes'
 import { ValidateBankDTO } from './dto/bank.dto'
 import { EventEmitter2 } from '@nestjs/event-emitter'
@@ -32,6 +33,8 @@ export class WalletService {
         private readonly prisma: PrismaService,
         private readonly response: ResponseService,
         private readonly paystack: PaystackService,
+        @InjectQueue('transfer-queue') private transferQueue: Queue,
+        @InjectQueue('charge.sucsess-queue') private chargeSucessQueue: Queue,
     ) { }
 
     async bankAccountVerification({ account_number, bank_code }: ValidateBankDTO) {
@@ -64,7 +67,7 @@ export class WalletService {
 
         if (!userMutex) {
             userMutex = new Mutex()
-            this.store.set(`request-withdrawal_${userId}`, userMutex)
+            await this.store.set(`request-withdrawal_${userId}`, userMutex)
         }
 
         const release = await userMutex.acquire()
@@ -150,12 +153,7 @@ export class WalletService {
     }
 
     async fundWallet({ sub }: JwtDecoded, { reference }: FundWalletDTO) {
-        let userMutex = await this.store.get<Mutex>(`fund-wallet_${sub}`)
-
-        if (!userMutex) {
-            userMutex = new Mutex()
-            this.store.set(`fund-wallet_${sub}`, userMutex)
-        }
+        let userMutex = await this.store.get<Mutex>(`fund-wallet_${sub}`) ?? new Mutex()
 
         const release = await userMutex.acquire()
 
@@ -170,18 +168,15 @@ export class WalletService {
 
         const { data } = verifyTx
         const amount = data.amount / 100
-        const channel = data?.authorization?.channel
-        const authorization_code = data?.authorization?.authorization_code
+        const authorization = data?.authorization
 
         try {
             const [tx] = await this.prisma.$transaction([
                 this.prisma.txHistory.create({
                     data: {
-                        amount: amount,
-                        channel: channel,
                         type: 'DEPOSIT',
-                        authorization_code,
                         ip: data?.ip_address,
+                        authorization, amount,
                         reference: `deposit-${reference}`,
                         user: { connect: { id: sub } },
                         status: Utils.toUpperCase(data.status) as TransferStatus,
@@ -196,22 +191,6 @@ export class WalletService {
                     },
                 }),
             ])
-
-            this.event.emit(
-                'notification.email',
-                new CreateEmailNotificationEvent({
-                    emails: user.email,
-                    template: 'FundWallet',
-                    data: {
-                        amount,
-                        type: 'DEPOSIT',
-                        date: tx.createdAt,
-                        channel: tx.channel,
-                        reference: tx.reference,
-                    },
-                    subject: 'Account Funded'
-                })
-            )
 
             this.event.emit(
                 'notification.in-app',
@@ -242,41 +221,26 @@ export class WalletService {
         }
     }
 
-    async manageWebhook(body: TransferEvent | ChargeSuccessEventData) {
+    async manageWebhookEvents(body: TransferEvent | ChargeSuccessEvent) {
         switch (body.event) {
             case 'charge.success':
-
+                await this.chargeSucessQueue.add('charge.sucsess-queue', body.data)
                 break
 
             case 'transfer.success':
+                await this.transferQueue.add('transfer.success', body.data)
                 break
-            case 'transfer.failed':
-            case 'transfer.reversed':
 
+            case 'transfer.failed':
+                await this.transferQueue.add('transfer.failed', body.data)
                 break
+
+            case 'transfer.reversed':
+                await this.transferQueue.add('transfer.reversed', body.data)
+                break
+
             default:
                 throw new HttpException("Unsupported Event", StatusCodes.InternalServerError)
         }
     }
-
-    // private async manageFiatEventsInternal(req: Request) {
-    //     const body: TransferEvent = req.body
-    //     const data = body.data
-    //     try {
-    //         const transaction = await this.getTransaction(data.reference)
-
-    //         if (transaction) {
-    //             await this.updateTransactionStatus(transaction.reference, Utils.toUpperCase(data.status) as TransferStatus)
-
-    //             const amount = this.calculateTotalAmount(data.amount, +transaction.totalFee)
-
-    //             if (body.event === 'transfer.reversed' || body.event === 'transfer.failed') {
-    //                 await this.updateUserBalance(transaction.userId, amount, 'increment')
-    //             }
-    //         }
-    //     } catch (err) {
-    //         console.error(err)
-    //         throw err
-    //     }
-    // }
 }

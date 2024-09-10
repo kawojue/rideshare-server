@@ -89,27 +89,31 @@ export class WalletController {
     return this.response.sendSuccess(res, StatusCodes.OK, data)
   }
 
-  // @ApiOperation({
-  //   summary: "Ignore."
-  // })
-  // @Post('/paystack/webhook')
-  // async manageFiatEvents(@Res() res: Response, @Req() req: Request, @RealIP() ip: string) {
-  //   if (!req.body || !req.body?.event || !req.body?.data) {
-  //     throw new HttpException("Unauthorized IP Address", StatusCodes.BadRequest)
-  //   }
+  @ApiOperation({
+    summary: "Ignore."
+  })
+  @Post('/paystack/webhook')
+  async manageWebhookEvents(
+    @Req() req: Request,
+    @Res() res: Response,
+    @RealIP() ip: string,
+  ) {
+    if (!req.body || !req.body?.event || !req.body?.data) {
+      throw new HttpException("Invalid data received", StatusCodes.BadRequest)
+    }
 
-  //   const allowedIPAddresses = ['52.31.139.75', '52.49.173.169', '52.214.14.220']
+    const allowedIPAddresses = ['52.31.139.75', '52.49.173.169', '52.214.14.220']
 
-  //   if (!allowedIPAddresses.includes(ip)) {
-  //     throw new HttpException("Unauthorized IP Address", StatusCodes.Unauthorized)
-  //   }
+    if (!allowedIPAddresses.includes(ip)) {
+      throw new HttpException("Unauthorized IP Address", StatusCodes.Unauthorized)
+    }
 
-  //   try {
-  //     await this.walletService.enqueueRequest(req)
-  //     res.sendStatus(StatusCodes.OK).end()
-  //   } catch (err) {
-  //     console.error(err)
-  //     throw new HttpException("Something went wrong", StatusCodes.InternalServerError)
-  //   }
-  // }
+    try {
+      await this.walletService.manageWebhookEvents(req.body)
+      res.sendStatus(StatusCodes.OK).end()
+    } catch (err) {
+      console.error(err)
+      throw new HttpException("Something went wrong", StatusCodes.InternalServerError)
+    }
+  }
 }

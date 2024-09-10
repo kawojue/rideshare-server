@@ -22,7 +22,7 @@ const SharedModule = BullModule.registerQueue(
         }
     },
     {
-        name: 'charge.success-queue',
+        name: 'charge.sucsess-queue',
         defaultJobOptions: {
             removeOnFail: false,
             removeOnComplete: true,

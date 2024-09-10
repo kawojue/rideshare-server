@@ -1,6 +1,7 @@
 import {
     User,
     Modmin,
+    Prisma,
     TransferStatus,
     WithdrwalRequest,
 } from '@prisma/client'
@@ -17,7 +18,6 @@ import { Utils } from 'helpers/utils'
 import { avatars } from 'utils/avatars'
 import { TimeToMilli } from 'enums/base'
 import {
-    CreateSmsNotificationEvent,
     CreatePushNotificationEvent,
     CreateEmailNotificationEvent,
     CreateInAppNotificationEvent,
@@ -27,12 +27,10 @@ import { PrismaService } from 'prisma/prisma.service'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { StoreService } from 'src/store/store.service'
 import { WithdrawalRequestDTO } from './dto/payout.dto'
-import { ResponseService } from 'libs/response.service'
 import { EncryptionService } from 'libs/encryption.service'
 import { FetchModminsDTO } from 'src/app/dto/pagination.dto'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
 import { PaystackService } from 'libs/Paystack/paystack.service'
-
 
 @Injectable()
 export class ModminService {
@@ -41,12 +39,9 @@ export class ModminService {
         private readonly store: StoreService,
         private readonly event: EventEmitter2,
         private readonly prisma: PrismaService,
-        private readonly response: ResponseService,
         private readonly paystack: PaystackService,
         private readonly encryption: EncryptionService,
     ) { }
-
-    // private mutexes = new Map<string, Mutex>()
 
     async login({ email, password }: LoginDTO) {
         const modmin = await this.prisma.modmin.findUnique({
@@ -262,7 +257,11 @@ export class ModminService {
         }
     }
 
-    async withdrawalRequest(requestId: string, { action }: WithdrawalRequestDTO) {
+    async withdrawalRequest(
+        requestId: string,
+        { sub }: JwtDecoded,
+        { action }: WithdrawalRequestDTO
+    ) {
         let request = await this.prisma.withdrwalRequest.findUnique({
             where: { id: requestId },
             include: {
@@ -289,7 +288,7 @@ export class ModminService {
 
         if (!mutex) {
             mutex = new Mutex()
-            this.store.set(`withdrawal_${request.wallet.userId}`, mutex)
+            await this.store.set(`withdrawal_${request.wallet.userId}`, mutex)
         }
 
         const release = await mutex.acquire()
@@ -332,7 +331,10 @@ export class ModminService {
                 const [withdrawal] = await this.prisma.$transaction([
                     this.prisma.withdrwalRequest.update({
                         where: { id: requestId },
-                        data: { status: 'GRANTED' }
+                        data: {
+                            status: 'GRANTED',
+                            modmin: { connect: { id: sub } }
+                        }
                     }),
                     this.prisma.txHistory.create({
                         data: {
@@ -342,14 +344,14 @@ export class ModminService {
                             paystackFee: fee.paystackFee,
                             reference: transfer.reference,
                             processingFee: fee.processingFee,
-                            transfer_code: transfer.transfer_code,
-                            recipient_code: String(transfer.recipient),
+                            transferCode: transfer.transfer_code,
+                            recipientCode: String(transfer.recipient),
                             createdAt: new Date(transfer.createdAt),
                             destinationBankCode: recepient.details.bank_code,
                             destinationBankName: recepient.details.bank_name,
                             destinationAccountName: recepient.details.account_name,
-                            status: transfer.status.toUpperCase() as TransferStatus,
                             destinationAccountNumber: recepient.details.account_number,
+                            status: Utils.toUpperCase(transfer.status) as TransferStatus,
                             user: { connect: { id: request.wallet.userId } },
                         },
                     }),
@@ -362,7 +364,10 @@ export class ModminService {
                 const [withdrawal] = await this.prisma.$transaction([
                     this.prisma.withdrwalRequest.update({
                         where: { id: requestId },
-                        data: { status: 'DECLINED' }
+                        data: {
+                            status: 'DECLINED',
+                            modmin: { connect: { id: sub } }
+                        }
                     }),
                     this.prisma.wallet.update({
                         where: { userId: request.wallet.userId },
@@ -378,10 +383,19 @@ export class ModminService {
 
             this.event.emit(
                 'notification.in-app',
-                new CreateEmailNotificationEvent({
-                    subject: `Withdrwal Request ${action === 'GRANT' ? 'Approved' : 'Declined'}`,
-                    template: '',
-                    emails: request.wallet.user.email,
+                new CreateInAppNotificationEvent({
+                    topic: 'ACTIVITIES',
+                    title: 'Withdrawal Request',
+                    body: `Withdrwal Request ${action === 'GRANT' ? 'Approved' : 'Declined'}`,
+                })
+            )
+
+            this.event.emit(
+                'notification.push',
+                new CreatePushNotificationEvent({
+                    title: 'Withdrawal Request',
+                    body: `Withdrwal Request ${action === 'GRANT' ? 'Approved' : 'Declined'}`,
+                    userId: request.wallet.userId,
                 })
             )
 
@@ -397,22 +411,64 @@ export class ModminService {
             await this.store.delete(`withdrawal_${request.wallet.userId}`)
         }
 
-        return updatedRequest
+        return {
+            data: updatedRequest,
+            message: "Successful"
+        }
     }
 
-    async verifyProofOfAddress(driverId: string) {
-        const verification = await this.prisma.verification.findUnique({
-            where: { driverId }
+    async verifyProofOfAddress(driverId: string, { action }: WithdrawalRequestDTO) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: driverId },
+            select: { email: true }
         })
 
-        return await this.prisma.verification.update({
-            where: { driverId },
-            data: { addressVerified: !verification.addressVerified },
-            select: {
-                driverId: true,
-                proofOfAddress: true,
-                addressVerified: true,
-            }
-        })
+        let data: {
+            driverId: string
+            addressVerified: boolean
+            proofOfAddress: Prisma.JsonValue
+        }
+
+        if (action === 'GRANT') {
+            data = await this.prisma.verification.update({
+                where: { driverId },
+                data: { addressVerified: true },
+                select: {
+                    driverId: true,
+                    proofOfAddress: true,
+                    addressVerified: true,
+                }
+            })
+        } else {
+            data = await this.prisma.verification.update({
+                where: { driverId },
+                data: {
+                    proofOfAddress: null,
+                    addressVerified: false
+                },
+                select: {
+                    driverId: true,
+                    proofOfAddress: true,
+                    addressVerified: true,
+                }
+            })
+        }
+
+        this.event.emit(
+            'notification.email',
+            new CreateEmailNotificationEvent({
+                template: data.addressVerified ? 'ProofOfAddressApproved' : 'ProofOfAddressDisapproved',
+                subject: 'Proof of Address',
+                emails: user.email,
+                data: {
+
+                }
+            })
+        )
+
+        return {
+            data,
+            message: `Proof of Address has been ${data.addressVerified ? 'Approved' : 'Disapproved'}`
+        }
     }
 }
