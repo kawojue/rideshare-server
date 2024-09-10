@@ -4,30 +4,41 @@ import {
     TransferStatus,
     WithdrwalRequest,
 } from '@prisma/client'
-import { Response } from 'express'
+import { Mutex } from 'async-mutex'
 import {
-    FetchModminsDTO,
-    FetchWithdrawalRequestsDTO,
-} from 'src/app/dto/pagination.dto'
+    Injectable,
+    NotFoundException,
+    ConflictException,
+    ForbiddenException,
+    BadRequestException,
+    UnauthorizedException,
+} from '@nestjs/common'
+import { Utils } from 'helpers/utils'
 import { avatars } from 'utils/avatars'
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
-import { StatusCodes } from 'enums/statusCodes'
+import { TimeToMilli } from 'enums/base'
+import {
+    CreateSmsNotificationEvent,
+    CreatePushNotificationEvent,
+    CreateEmailNotificationEvent,
+    CreateInAppNotificationEvent,
+} from 'src/notification/notification.event'
 import { MiscService } from 'libs/misc.service'
 import { PrismaService } from 'prisma/prisma.service'
+import { EventEmitter2 } from '@nestjs/event-emitter'
+import { StoreService } from 'src/store/store.service'
 import { WithdrawalRequestDTO } from './dto/payout.dto'
 import { ResponseService } from 'libs/response.service'
 import { EncryptionService } from 'libs/encryption.service'
+import { FetchModminsDTO } from 'src/app/dto/pagination.dto'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
 import { PaystackService } from 'libs/Paystack/paystack.service'
-import { Utils } from 'helpers/utils'
-import { EventEmitter2 } from '@nestjs/event-emitter'
-import { CreateEmailNotificationEvent } from 'src/notification/notification.event'
 
 
 @Injectable()
 export class ModminService {
     constructor(
         private readonly misc: MiscService,
+        private readonly store: StoreService,
         private readonly event: EventEmitter2,
         private readonly prisma: PrismaService,
         private readonly response: ResponseService,
@@ -35,17 +46,7 @@ export class ModminService {
         private readonly encryption: EncryptionService,
     ) { }
 
-    private async updateCache(refresh_token: string, modminId: string) {
-        await this.prisma.cache.upsert({
-            where: { key: `token_${modminId}`, modminId },
-            create: {
-                refresh_token,
-                type: 'TOKEN_REFRESHER',
-                key: `token_${modminId}`,
-            },
-            update: { refresh_token }
-        })
-    }
+    // private mutexes = new Map<string, Mutex>()
 
     async login({ email, password }: LoginDTO) {
         const modmin = await this.prisma.modmin.findUnique({
@@ -74,7 +75,11 @@ export class ModminService {
         const access_token = await this.misc.generateAccessToken(payload)
         const refresh_token = await this.misc.generateRefreshToken(payload)
 
-        await this.updateCache(refresh_token, modmin.id)
+        await this.store.set(
+            `token_${modmin.id}`,
+            { refresh_token },
+            TimeToMilli.OneHundredTwentyDays
+        )
 
         return {
             access_token,
@@ -89,7 +94,7 @@ export class ModminService {
     }
 
     async updateAvatar(avatarId: string, { sub }: JwtDecoded) {
-        const avatar = avatars.find(avatar => String(avatar.id) === avatarId)
+        const avatar = avatars.find(avatar => avatar.id === +avatarId)
 
         const data = await this.prisma.modmin.update({
             where: { id: sub },
@@ -97,7 +102,7 @@ export class ModminService {
             select: { avatar: true }
         })
 
-        return data
+        return { data, message: "Avatar was updated successfully" }
     }
 
     async inviteNewModmin({ email, password, role, fullname }: InviteNewModminDTO) {
@@ -126,7 +131,9 @@ export class ModminService {
             }
         })
 
-        return { ...modmin, password }
+        const data = { ...modmin, password }
+
+        return { data, message: "A new Moderator/Admin has been invited" }
     }
 
     async toggleAccountSuspension(accountId: string, { sub }: JwtDecoded) {
@@ -255,222 +262,157 @@ export class ModminService {
         }
     }
 
-    // async withdrawalRequest(
-    //     res: Response,
-    //     requestId: string,
-    //     { action }: WithdrawalRequestDTO,
-    // ) {
-    //     try {
-    //         let request = await this.prisma.withdrwalRequest.findUnique({
-    //             where: { id: requestId },
-    //             include: { wallet: true }
-    //         })
+    async withdrawalRequest(requestId: string, { action }: WithdrawalRequestDTO) {
+        let request = await this.prisma.withdrwalRequest.findUnique({
+            where: { id: requestId },
+            include: {
+                wallet: {
+                    select: {
+                        user: {
+                            select: { email: true }
+                        },
+                        userId: true,
+                    },
+                }
+            }
+        })
 
-    //         if (!request) {
-    //             throw new NotFoundException("Withdrawal request not found")
-    //         }
+        if (!request) {
+            throw new NotFoundException("Withdrawal request not found")
+        }
 
-    //         if (request.locked) {
-    //             return this.response.sendError(res, StatusCodes.Conflict, "Request is already being processed")
-    //         }
+        if (request.locked) {
+            throw new ConflictException("Request is already being processed")
+        }
 
-    //         await this.prisma.withdrwalRequest.update({
-    //             where: { id: requestId },
-    //             data: { locked: true }
-    //         })
+        let mutex = await this.store.get<Mutex>(request.wallet.userId)
 
-    //         let updatedRequest: WithdrwalRequest
+        if (!mutex) {
+            mutex = new Mutex()
+            this.store.set(`withdrawal_${request.wallet.userId}`, mutex)
+        }
 
-    //         if (action === "GRANT") {
-    //             const amount = request.amount
-    //             const fee = Utils.calculateFees(+amount)
-    //             const settlementAmount = amount.toNumber() - fee.totalFee
-    //             const amountInKobo = settlementAmount * 100
+        const release = await mutex.acquire()
 
-    //             const { data: details } = await this.paystack.resolveAccount(request.wallet.accountNumber, request.wallet.)
+        await this.prisma.withdrwalRequest.update({
+            where: { id: requestId },
+            data: { locked: true }
+        })
 
-    //             const { data: recepient } = await this.paystack.createRecipient({
-    //                 account_number: details.account_number,
-    //                 bank_code: request.linkedBank.bankCode,
-    //                 currency: 'NGN',
-    //                 name: details.account_name,
-    //                 type: 'nuban',
-    //             })
+        let updatedRequest: WithdrwalRequest
 
-    //             const { data: transfer } = await this.paystack.initiateTransfer({
-    //                 source: 'balance',
-    //                 amount: amountInKobo,
-    //                 reason: `RideShare - withdrawal`,
-    //                 recipient: recepient.recipient_code,
-    //                 reference: `withdrawal-${generateRandomDigits(7)}${Date.now()}`,
-    //             })
+        try {
+            if (action === "GRANT") {
+                const amount = request.amount
+                const fee = Utils.calculateFees(+amount)
+                const settlementAmount = amount.toNumber() - fee.totalFee
+                const amountInKobo = settlementAmount * 100
 
-    //             const [withdrawal] = await Promise.all([
-    //                 this.prisma.withdrwalRequest.update({
-    //                     where: { id: requestId },
-    //                     data: { status: 'GRANTED' }
-    //                 }),
-    //                 this.prisma.txHistory.create({
-    //                     data: {
-    //                         amount: amount,
-    //                         type: 'WITHDRAWAL',
-    //                         totalFee: fee.totalFee,
-    //                         paystackFee: fee.paystackFee,
-    //                         reference: transfer.reference,
-    //                         processingFee: fee.processingFee,
-    //                         transfer_code: transfer.transfer_code,
-    //                         recipient_code: String(transfer.recipient),
-    //                         createdAt: new Date(transfer.createdAt),
-    //                         destinationBankCode: recepient.details.bank_code,
-    //                         destinationBankName: recepient.details.bank_name,
-    //                         destinationAccountName: recepient.details.account_name,
-    //                         status: transfer.status.toUpperCase() as TransferStatus,
-    //                         destinationAccountNumber: recepient.details.account_number,
-    //                         user: { connect: { id: request.linkedBank.userId } },
-    //                     },
-    //                 }),
-    //             ])
+                const { data: details } = await this.paystack.resolveAccount(
+                    request.destinationAccountNumber,
+                    request.destinationBankCode
+                )
 
-    //             updatedRequest = withdrawal
-    //         }
+                const { data: recepient } = await this.paystack.createRecipient({
+                    account_number: details.account_number,
+                    bank_code: request.destinationBankCode,
+                    currency: 'NGN',
+                    name: details.account_name,
+                    type: 'nuban',
+                })
 
-    //         if (action === "DECLINE") {
-    //             const [withdrawal] = await Promise.all([
-    //                 this.prisma.withdrwalRequest.update({
-    //                     where: { id: requestId },
-    //                     data: { status: 'GRANTED' }
-    //                 }),
-    //                 this.prisma.wallet.update({
-    //                     where: { userId: request.linkedBank.userId },
-    //                     data: {
-    //                         lastApprovedAt: new Date(),
-    //                         lastApprovedAmount: request.amount,
-    //                         balance: { increment: request.amount },
-    //                     }
-    //                 })
-    //             ])
+                const { data: transfer } = await this.paystack.initiateTransfer({
+                    source: 'balance',
+                    amount: amountInKobo,
+                    reason: `RideShare - withdrawal`,
+                    recipient: recepient.recipient_code,
+                    reference: `withdrawal-${Utils.generateRandomDigits(7)}${Date.now()}`,
+                })
 
-    //             updatedRequest = withdrawal
-    //         }
+                const [withdrawal] = await this.prisma.$transaction([
+                    this.prisma.withdrwalRequest.update({
+                        where: { id: requestId },
+                        data: { status: 'GRANTED' }
+                    }),
+                    this.prisma.txHistory.create({
+                        data: {
+                            amount: amount,
+                            type: 'WITHDRAWAL',
+                            totalFee: fee.totalFee,
+                            paystackFee: fee.paystackFee,
+                            reference: transfer.reference,
+                            processingFee: fee.processingFee,
+                            transfer_code: transfer.transfer_code,
+                            recipient_code: String(transfer.recipient),
+                            createdAt: new Date(transfer.createdAt),
+                            destinationBankCode: recepient.details.bank_code,
+                            destinationBankName: recepient.details.bank_name,
+                            destinationAccountName: recepient.details.account_name,
+                            status: transfer.status.toUpperCase() as TransferStatus,
+                            destinationAccountNumber: recepient.details.account_number,
+                            user: { connect: { id: request.wallet.userId } },
+                        },
+                    }),
+                ])
 
-    //         res.on('finish', async () => {
-    //             // TODO: send email for starus change
-    //         })
+                updatedRequest = withdrawal
+            }
 
-    //         this.response.sendSuccess(res, StatusCodes.OK, { data: updatedRequest })
-    //     } catch (err) {
-    //         this.misc.handlePaystackAndServerError(res, err)
-    //     }
-    // }
+            if (action === "DECLINE") {
+                const [withdrawal] = await this.prisma.$transaction([
+                    this.prisma.withdrwalRequest.update({
+                        where: { id: requestId },
+                        data: { status: 'DECLINED' }
+                    }),
+                    this.prisma.wallet.update({
+                        where: { userId: request.wallet.userId },
+                        data: {
+                            lastApprovedAmount: request.amount,
+                            balance: { increment: request.amount },
+                        }
+                    })
+                ])
 
-    // async fetchWithdrawalRequest(
-    //     res: Response,
-    //     { sub, role }: JwtDecoded,
-    //     {
-    //         min,
-    //         max,
-    //         sortBy,
-    //         status,
-    //         page = 1,
-    //         limit = 50,
-    //         search = '',
-    //         endDate = '',
-    //         startDate = '',
-    //     }: FetchWithdrawalRequestsDTO
-    // ) {
-    //     try {
-    //         page = Number(page)
-    //         limit = Number(limit)
+                updatedRequest = withdrawal
+            }
 
-    //         if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
-    //             return this.response.sendError(res, StatusCodes.BadRequest, "Invalid pagination query")
-    //         }
+            this.event.emit(
+                'notification.in-app',
+                new CreateEmailNotificationEvent({
+                    subject: `Withdrwal Request ${action === 'GRANT' ? 'Approved' : 'Declined'}`,
+                    template: '',
+                    emails: request.wallet.user.email,
+                })
+            )
 
-    //         const offset = (page - 1) * limit
+        } catch (err) {
+            console.error(err)
+            throw err
+        } finally {
+            release()
+            await this.prisma.withdrwalRequest.update({
+                where: { id: requestId },
+                data: { locked: false }
+            })
+            await this.store.delete(`withdrawal_${request.wallet.userId}`)
+        }
 
-    //         const dateFilter = {
-    //             gte: startDate !== '' ? new Date(startDate) : new Date(0),
-    //             lte: endDate !== '' ? new Date(endDate) : new Date(),
-    //         }
+        return updatedRequest
+    }
 
-    //         const rangeFilter = {
-    //             gte: min ? Number(min) : null,
-    //             lte: max ? Number(max) : null,
-    //         }
+    async verifyProofOfAddress(driverId: string) {
+        const verification = await this.prisma.verification.findUnique({
+            where: { driverId }
+        })
 
-    //         const [requests, total] = await Promise.all([
-    //             this.prisma.withdrwalRequest.findMany({
-    //                 where: {
-    //                     linkedBank: (role === "ADMIN" || role === "MODERATOR") ? {
-    //                         userId: undefined
-    //                     } : { userId: sub },
-    //                     amount: rangeFilter,
-    //                     createdAt: dateFilter,
-    //                     status: status || undefined,
-    //                     OR: [
-    //                         { linkedBank: { bankName: { contains: search, mode: 'insensitive' } } },
-    //                         { linkedBank: { accountName: { contains: search, mode: 'insensitive' } } },
-    //                     ]
-    //                 },
-    //                 orderBy: sortBy === "HIGHEST" ? { amount: 'desc' } : sortBy === "LOWEST" ? { amount: 'asc' } : { createdAt: 'desc' },
-    //                 take: limit,
-    //                 skip: offset,
-    //             }),
-    //             this.prisma.withdrwalRequest.count({
-    //                 where: {
-    //                     linkedBank: (role === "ADMIN" || role === "MODERATOR") ? {
-    //                         userId: undefined
-    //                     } : { userId: sub },
-    //                     amount: rangeFilter,
-    //                     createdAt: dateFilter,
-    //                     status: status || undefined,
-    //                     OR: [
-    //                         { linkedBank: { bankName: { contains: search, mode: 'insensitive' } } },
-    //                         { linkedBank: { accountName: { contains: search, mode: 'insensitive' } } },
-    //                     ]
-    //                 },
-    //             })
-    //         ])
-
-    //         const totalPage = Math.ceil(total / limit)
-    //         const hasNext = page < totalPage
-    //         const hasPrev = page > 1
-
-    //         this.response.sendSuccess(res, StatusCodes.OK, {
-    //             data: requests,
-    //             metadata: {
-    //                 page,
-    //                 limit,
-    //                 total,
-    //                 totalPage,
-    //                 hasNext,
-    //                 hasPrev,
-    //             }
-    //         })
-    //     } catch (err) {
-    //         this.misc.handlePaystackAndServerError(res, err)
-    //     }
-    // }
-
-    // async verifyProofOfAddress(res: Response, driverId: string) {
-    //     try {
-    //         const verification = await this.prisma.verification.findUnique({
-    //             where: { driverId }
-    //         })
-
-    //         const newVerification = await this.prisma.verification.update({
-    //             where: { driverId },
-    //             data: { addressVerified: !verification.addressVerified },
-    //             select: {
-    //                 driverId: true,
-    //                 proofOfAddress: true,
-    //                 addressVerified: true,
-    //             }
-    //         })
-
-    //         this.response.sendSuccess(res, StatusCodes.OK, { data: newVerification })
-    //     } catch (err) {
-    //         this.misc.handlePaystackAndServerError(res, err)
-    //     }
-    // }
+        return await this.prisma.verification.update({
+            where: { driverId },
+            data: { addressVerified: !verification.addressVerified },
+            select: {
+                driverId: true,
+                proofOfAddress: true,
+                addressVerified: true,
+            }
+        })
+    }
 }

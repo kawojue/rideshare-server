@@ -1,12 +1,10 @@
 import {
     IsString,
     IsNotEmpty,
-    IsOptional,
-    MaxLength,
-    MinLength,
 } from "class-validator"
-import { ApiProperty } from "@nestjs/swagger"
+import { ValidateBankDTO } from "./bank.dto"
 import { Transform } from "class-transformer"
+import { ApiProperty } from "@nestjs/swagger"
 
 export class AmountDTO {
     @ApiProperty({
@@ -24,4 +22,13 @@ export class FundWalletDTO {
     @IsString()
     @IsNotEmpty()
     reference: string
+}
+
+export class RequestWidrawalDTO extends ValidateBankDTO {
+    @ApiProperty({
+        example: 2000.23,
+    })
+    @IsNotEmpty()
+    @Transform(({ value }) => Number(value))
+    amount: number
 }

@@ -159,7 +159,11 @@ export class AuthService {
                 this.misc.generateRefreshToken(jwtPayload)
             ])
 
-            await this.store.set(`token_${user.id}`, refresh_token)
+            await this.store.set(
+                `token_${user.id}`,
+                { refresh_token },
+                TimeToMilli.OneHundredTwentyDays
+            )
 
             const setup = await this.prisma.profileSetup(user.id)
 

@@ -1,7 +1,7 @@
 import { config } from 'configs/env.config'
+import { PrismaClient } from '@prisma/client'
 import { BadRequestException } from '@nestjs/common'
 import { parsePhoneNumber } from 'awesome-phonenumber'
-import { Prisma, PrismaClient } from '@prisma/client'
 
 const { isValidPhoneNumber } = require('libphonenumber-js')
 

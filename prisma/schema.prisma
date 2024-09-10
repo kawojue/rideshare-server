@@ -8,22 +8,22 @@ datasource db {
 }
 
 model User {
-  id                  String    @id @default(uuid()) @db.Uuid
+  id                  String        @id @default(uuid()) @db.Uuid
   firstname           String
   lastname            String
   middlename          String?
-  customerCode        String?   @map("customer_code")
-  status              Status    @default(ACTIVE)
-  email               String?   @unique
-  phone               String?   @unique
-  significant         String?   @unique
-  regionCode          String?   @map("region_code")
-  countryCode         String?   @map("country_code")
-  providerId          String?   @unique @map("provider_id")
+  customerCode        String?       @map("customer_code")
+  status              AccountStatus @default(ACTIVE)
+  email               String?       @unique
+  phone               String?       @unique
+  significant         String?       @unique
+  regionCode          String?       @map("region_code")
+  countryCode         String?       @map("country_code")
+  providerId          String?       @unique @map("provider_id")
   role                Role
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-  lastUsedBiometricAt DateTime? @map("last_used_biometric_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  lastUsedBiometricAt DateTime?     @map("last_used_biometric_at")
 
   inbox        Inbox?
   wallet       Wallet?
@@ -100,12 +100,13 @@ model Verification {
   idVerifiedAt       DateTime? @map("id_verified_at")
   idVerificationData Json?     @map("id_verification_data")
 
-  driverLicense         String?  @unique @map("driver_license")
-  driverLicenseData     Json?    @map("driver_license_data")
-  driverLicenseVerified Boolean? @default(false) @map("driver_license_verified")
+  driverLicense         String? @unique @map("driver_license")
+  driverLicenseData     Json?   @map("driver_license_data")
+  driverLicenseVerified Boolean @default(false) @map("driver_license_verified")
 
-  proofOfAddress  Json?    @map("proof_of_address")
-  addressVerified Boolean? @default(false) @map("address_verified")
+  proofOfAddress  Json?   @map("proof_of_address")
+  landmark        String?
+  addressVerified Boolean @default(false) @map("address_verified")
 
   driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
   driverId String @unique @map("driver_id") @db.Uuid
@@ -238,6 +239,8 @@ model TxHistory {
   destinationBankName      String?        @map("destination_bank_name")
   destinationAccountName   String?        @map("destination_account_name")
   destinationAccountNumber String?        @map("destination_account_number")
+  paidAt                   DateTime?
+  reversed                 Boolean?
   createdAt                DateTime       @default(now()) @map("created_at")
   updatedAt                DateTime       @updatedAt @map("updated_at")
 
@@ -276,15 +279,22 @@ model Wallet {
 }
 
 model WithdrwalRequest {
-  id        String       @id @default(uuid()) @db.Uuid
-  amount    Decimal      @db.Decimal(10, 2)
-  locked    Boolean      @default(false)
-  status    PayoutStatus @default(PENDING)
-  createdAt DateTime     @default(now()) @map("created_at")
-  updatedAt DateTime     @updatedAt @map("updated_at")
+  id                       String       @id @default(uuid()) @db.Uuid
+  amount                   Decimal      @db.Decimal(10, 2)
+  locked                   Boolean      @default(false)
+  status                   PayoutStatus @default(PENDING)
+  destinationBankCode      String?      @map("destination_bank_code")
+  destinationBankName      String?      @map("destination_bank_name")
+  destinationAccountName   String?      @map("destination_account_name")
+  destinationAccountNumber String?      @map("destination_account_number")
+  createdAt                DateTime     @default(now()) @map("created_at")
+  updatedAt                DateTime     @updatedAt @map("updated_at")
 
-  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  walletId String @map("wallet_id") @db.Uuid
+  walletId String  @map("wallet_id") @db.Uuid
+  modminId String? @map("modmin_id") @db.Uuid
+
+  wallet Wallet  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  modmin Modmin? @relation(references: [id], fields: [modminId], onDelete: Cascade)
 
   @@index([status])
   @@index([createdAt, updatedAt])
@@ -292,21 +302,22 @@ model WithdrwalRequest {
 }
 
 model Modmin {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String        @id @default(uuid()) @db.Uuid
   fullname  String
-  email     String   @unique
+  email     String        @unique
   avatar    String?
   password  String
   role      Role
-  status    Status   @default(ACTIVE)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  status    AccountStatus @default(ACTIVE)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
 
   inbox Inbox?
 
-  cache            Cache[]
-  sentMessages     Message[] @relation("ModminSentMessages")
-  receivedMessages Message[] @relation("ModminReceivedMessages")
+  cache              Cache[]
+  withdrawalRequests WithdrwalRequest[]
+  sentMessages       Message[]          @relation("ModminSentMessages")
+  receivedMessages   Message[]          @relation("ModminReceivedMessages")
 
   @@index([role])
   @@index([status])
@@ -411,7 +422,7 @@ enum Provider {
   Google
 }
 
-enum Status {
+enum AccountStatus {
   ACTIVE
   SUSPENDED
 }
@@ -424,7 +435,6 @@ enum TxType {
 
 enum CacheType {
   QOREID
-  TOKEN_REFRESHER
 }
 
 enum PayoutStatus {

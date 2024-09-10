@@ -15,7 +15,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter'
 import { QoreidService } from 'libs/Qoreid/qoreid.service'
 import { UpdateVehicleDTO, VehicleDTO } from './dto/vehicle.dto'
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service'
-import { DriverLicenseDTO, IDVerificationDTO } from './dto/verification.dto'
+import { DriverLicenseDTO, IDVerificationDTO, UploadProofOfAddressDTO } from './dto/verification.dto'
 import { CreateEmailNotificationEvent } from 'src/notification/notification.event'
 
 @Injectable()
@@ -227,7 +227,11 @@ export class DriverService {
         })
     }
 
-    async uploadProofOfAddress({ sub }: JwtDecoded, file: Express.Multer.File) {
+    async uploadProofOfAddress(
+        { sub }: JwtDecoded,
+        file: Express.Multer.File,
+        { landmark }: UploadProofOfAddressDTO
+    ) {
         if (!file) {
             throw new BadRequestException("File not found")
         }
@@ -252,6 +256,7 @@ export class DriverService {
         return await this.prisma.verification.update({
             where: { driverId: sub },
             data: {
+                landmark,
                 proofOfAddress: data,
                 addressVerified: true,
             },

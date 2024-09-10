@@ -1,33 +1,38 @@
+import {
+    Injectable,
+    HttpException,
+    NotFoundException,
+    ConflictException,
+    BadRequestException,
+} from '@nestjs/common'
 import { Mutex } from 'async-mutex'
 import { Utils } from 'helpers/utils'
+import { TimeToMilli } from 'enums/base'
 import {
     CreatePushNotificationEvent,
     CreateEmailNotificationEvent,
     CreateInAppNotificationEvent,
 } from 'src/notification/notification.event'
 import { Request, Response } from 'express'
-import { TransferStatus } from '@prisma/client'
 import { StatusCodes } from 'enums/statusCodes'
 import { ValidateBankDTO } from './dto/bank.dto'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { PrismaService } from 'prisma/prisma.service'
+import { StoreService } from 'src/store/store.service'
 import { ResponseService } from 'libs/response.service'
-import { AmountDTO, FundWalletDTO } from './dto/tx.dto'
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { RequestWidrawalDTO, FundWalletDTO } from './dto/tx.dto'
 import { PaystackService } from 'libs/Paystack/paystack.service'
+import { TransferStatus, WithdrwalRequest } from '@prisma/client'
 
 @Injectable()
 export class WalletService {
     constructor(
+        private readonly store: StoreService,
         private readonly event: EventEmitter2,
         private readonly prisma: PrismaService,
         private readonly response: ResponseService,
         private readonly paystack: PaystackService,
     ) { }
-
-    private processing = false
-    private requestQueue: Request[] = []
-    private userMutexes = new Map<string, Mutex>()
 
     async bankAccountVerification({ account_number, bank_code }: ValidateBankDTO) {
         const { data } = await this.paystack.resolveAccount(account_number, bank_code)
@@ -36,6 +41,7 @@ export class WalletService {
 
     async fetchBanks() {
         const { data: banks } = await this.paystack.listBanks()
+
         return banks
     }
 
@@ -52,60 +58,66 @@ export class WalletService {
     async requestWithdrawal(
         res: Response,
         { sub: userId }: JwtDecoded,
-        { amount }: AmountDTO
+        { amount, account_number, bank_code }: RequestWidrawalDTO
     ) {
-        let userMutex = this.userMutexes.get(userId)
+        let userMutex = await this.store.get<Mutex>(`request-withdrawal_${userId}`)
 
         if (!userMutex) {
             userMutex = new Mutex()
-            this.userMutexes.set(userId, userMutex)
+            this.store.set(`request-withdrawal_${userId}`, userMutex)
         }
 
         const release = await userMutex.acquire()
 
-        try {
-            if (amount < 100) {
-                return this.response.sendError(res, StatusCodes.BadRequest, "Minimum withdrawal amount is ₦100.00")
-            }
+        if (amount < 100) {
+            throw new BadRequestException("Minimum withdrawal amount is ₦100.00")
+        }
 
-            const wallet = await this.prisma.getUserWallet(userId)
+        const wallet = await this.prisma.getUserWallet(userId)
 
-            if (wallet.locked) {
-                return this.response.sendError(res, StatusCodes.Forbidden, "Try again later..")
-            }
+        if (wallet.locked) {
+            throw new ConflictException("Try again later..")
+        }
 
-            if (wallet.balance.toNumber() < amount) {
-                return this.response.sendError(res, StatusCodes.UnprocessableEntity, "Insufficient balance")
-            }
+        if (wallet.balance.toNumber() < amount) {
+            return this.response.sendError(res, StatusCodes.UnprocessableEntity, "Insufficient balance")
+        }
 
-            let eligible = false
+        const { data: destination } = await this.paystack.resolveAccount(account_number, bank_code)
+        const bank = await this.paystack.getBankByBankCode(bank_code)
 
-            if (!wallet.lastApprovedAt) {
+        let eligible = false
+
+        if (!wallet.lastApprovedAt) {
+            eligible = true
+        } else {
+            const now = Date.now()
+            const lastApprovedAt = new Date(wallet.lastApprovedAt).getTime()
+
+            if (now - lastApprovedAt >= TimeToMilli.TwoWeeks) {
                 eligible = true
-            } else {
-                const twoWeeksInMilliseconds = 14 * 24 * 60 * 60 * 1000 // 2 weeks
-                const now = Date.now()
-                const lastApprovedAt = new Date(wallet.lastApprovedAt).getTime()
-
-                if (now - lastApprovedAt >= twoWeeksInMilliseconds) {
-                    eligible = true
-                }
             }
+        }
 
-            if (!eligible) {
-                return this.response.sendError(res, StatusCodes.BadRequest, "You're not yet eligible for a withdrawal request")
-            }
+        if (!eligible) {
+            throw new BadRequestException("You're not yet eligible to request for a withdrawal")
+        }
 
-            await this.prisma.wallet.update({
-                where: { id: wallet.id },
-                data: { locked: true },
-            })
+        await this.prisma.wallet.update({
+            where: { id: wallet.id },
+            data: { locked: true },
+        })
 
-            const withdrawalRequest = await this.prisma.$transaction([
+        try {
+            const [withdrawalRequest] = await this.prisma.$transaction([
                 this.prisma.withdrwalRequest.create({
                     data: {
                         amount,
                         status: 'PENDING',
+                        destinationBankCode: bank.code,
+                        destinationBankName: bank.name,
+                        destinationAccountName: destination.account_name,
+                        destinationAccountNumber: destination.account_number,
                         wallet: { connect: { id: wallet.id } },
                     },
                 }),
@@ -118,57 +130,50 @@ export class WalletService {
                 }),
             ])
 
+            Utils.sanitizeData<WithdrwalRequest>(withdrawalRequest, ['locked'])
+
             return {
                 message: "Withdrawal request has been sent to the Admin in charge",
                 data: withdrawalRequest,
             }
         } catch (err) {
             console.error(err)
-            return this.response.sendError(res, StatusCodes.InternalServerError, "Something went wrong. Please try again later.")
+            throw err
         } finally {
             release()
             await this.prisma.wallet.update({
                 where: { userId },
                 data: { locked: false },
             })
+            await this.store.delete(`request-withdrawal_${userId}`)
         }
     }
 
-    async fundWallet(
-        res: Response,
-        { sub }: JwtDecoded,
-        { reference }: FundWalletDTO,
-    ) {
-        let userMutex = this.userMutexes.get(sub)
+    async fundWallet({ sub }: JwtDecoded, { reference }: FundWalletDTO) {
+        let userMutex = await this.store.get<Mutex>(`fund-wallet_${sub}`)
 
         if (!userMutex) {
             userMutex = new Mutex()
-            this.userMutexes.set(sub, userMutex)
+            this.store.set(`fund-wallet_${sub}`, userMutex)
         }
 
         const release = await userMutex.acquire()
 
+        const user = await this.prisma.user.findUnique({
+            where: { id: sub }
+        })
+
+        const verifyTx = await this.paystack.verifyTransaction(reference)
+        if (!verifyTx.status || verifyTx?.data?.status !== "success") {
+            throw new HttpException('Payment is required', StatusCodes.PaymentIsRequired)
+        }
+
+        const { data } = verifyTx
+        const amount = data.amount / 100
+        const channel = data?.authorization?.channel
+        const authorization_code = data?.authorization?.authorization_code
+
         try {
-            const user = await this.prisma.user.findUnique({
-                where: { id: sub }
-            })
-
-            const wallet = await this.prisma.getUserWallet(sub)
-
-            if (!wallet) {
-                return this.response.sendError(res, StatusCodes.NotFound, 'Wallet not found')
-            }
-
-            const verifyTx = await this.paystack.verifyTransaction(reference)
-            if (!verifyTx.status || verifyTx?.data?.status !== "success") {
-                return this.response.sendError(res, StatusCodes.PaymentIsRequired, 'Payment is required')
-            }
-
-            const { data } = verifyTx
-            const amount = data.amount / 100
-            const channel = data?.authorization?.channel
-            const authorization_code = data?.authorization?.authorization_code
-
             const [tx] = await this.prisma.$transaction([
                 this.prisma.txHistory.create({
                     data: {
@@ -176,10 +181,10 @@ export class WalletService {
                         channel: channel,
                         type: 'DEPOSIT',
                         authorization_code,
-                        ip: data.ip_address,
+                        ip: data?.ip_address,
                         reference: `deposit-${reference}`,
                         user: { connect: { id: sub } },
-                        status: data.status.toUpperCase() as TransferStatus,
+                        status: Utils.toUpperCase(data.status) as TransferStatus,
                     },
                 }),
                 this.prisma.wallet.update({
@@ -230,75 +235,48 @@ export class WalletService {
             return Utils.removeNullFields(tx)
         } catch (err) {
             console.error(err)
-            return this.response.sendError(res, StatusCodes.InternalServerError, "Something went wrong. Please try again later.")
+            throw err
         } finally {
             release()
+            await this.store.delete(`fund-wallet_${sub}`)
         }
     }
 
-    async enqueueRequest(req: Request) {
-        this.requestQueue.push(req)
-        await this.processQueue()
-    }
+    async manageWebhook(body: TransferEvent | ChargeSuccessEventData) {
+        switch (body.event) {
+            case 'charge.success':
 
-    private async processQueue() {
-        if (!this.processing) {
-            this.processing = true
+                break
 
-            while (this.requestQueue.length > 0) {
-                const req = this.requestQueue.shift()
-                if (req) {
-                    await this.manageFiatEventsInternal(req)
-                }
-            }
+            case 'transfer.success':
+                break
+            case 'transfer.failed':
+            case 'transfer.reversed':
 
-            this.processing = false
+                break
+            default:
+                throw new HttpException("Unsupported Event", StatusCodes.InternalServerError)
         }
     }
 
-    private async manageFiatEventsInternal(req: Request) {
-        const body: TransferEvent = req.body
-        const data = body.data
-        try {
-            const transaction = await this.getTransaction(data.reference)
+    // private async manageFiatEventsInternal(req: Request) {
+    //     const body: TransferEvent = req.body
+    //     const data = body.data
+    //     try {
+    //         const transaction = await this.getTransaction(data.reference)
 
-            if (transaction) {
-                await this.updateTransactionStatus(transaction.reference, Utils.toUpperCase(data.status) as TransferStatus)
+    //         if (transaction) {
+    //             await this.updateTransactionStatus(transaction.reference, Utils.toUpperCase(data.status) as TransferStatus)
 
-                const amount = this.calculateTotalAmount(data.amount, +transaction.totalFee)
+    //             const amount = this.calculateTotalAmount(data.amount, +transaction.totalFee)
 
-                if (body.event === 'transfer.reversed' || body.event === 'transfer.failed') {
-                    await this.updateUserBalance(transaction.userId, amount, 'increment')
-                }
-            }
-        } catch (err) {
-            console.error(err)
-            throw err
-        }
-    }
-
-    private async getTransaction(reference: string) {
-        return await this.prisma.txHistory.findUnique({
-            where: { reference }
-        })
-    }
-
-    private async updateTransactionStatus(reference: string, status: TransferStatus) {
-        await this.prisma.txHistory.update({
-            where: { reference },
-            data: { status }
-        })
-    }
-
-    private calculateTotalAmount(amount: number, totalFee: number) {
-        const KOBO = 100 as const
-        return (amount / KOBO) + totalFee
-    }
-
-    private async updateUserBalance(userId: string, amount: number, action: 'increment' | 'decrement') {
-        await this.prisma.wallet.update({
-            where: { userId },
-            data: { balance: { [action]: amount } }
-        })
-    }
+    //             if (body.event === 'transfer.reversed' || body.event === 'transfer.failed') {
+    //                 await this.updateUserBalance(transaction.userId, amount, 'increment')
+    //             }
+    //         }
+    //     } catch (err) {
+    //         console.error(err)
+    //         throw err
+    //     }
+    // }
 }

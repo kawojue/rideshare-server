@@ -2,9 +2,10 @@ import {
     IsEnum,
     IsString,
     IsNotEmpty,
+    IsOptional,
 } from "class-validator"
 import { IDType } from "@prisma/client"
-import { ApiProperty } from "@nestjs/swagger"
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
 
 export class IDVerificationDTO {
     @ApiProperty({
@@ -43,4 +44,19 @@ export class DriverLicenseDTO {
     @IsString()
     @IsNotEmpty()
     dob: string
+}
+
+export class UploadProofOfAddressDTO {
+    @ApiPropertyOptional({
+        example: 'Opp. General Hospital',
+        description: 'This is just an option for the driver to type in a popular landmark'
+    })
+    landmark?: string
+
+    @ApiPropertyOptional({
+        type: 'string',
+        format: 'binary',
+    })
+    @IsOptional()
+    file?: Express.Multer.File
 }

@@ -20,6 +20,7 @@ import {
 import {
   DriverLicenseDTO,
   IDVerificationDTO,
+  UploadProofOfAddressDTO,
 } from './dto/verification.dto'
 import { Response } from 'express'
 import { Role } from '@prisma/client'
@@ -74,11 +75,15 @@ export class DriverController {
   async uploadProofOfAddress(
     @Res() res: Response,
     @GetAuthParam() auth: JwtDecoded,
+    @Body() body: UploadProofOfAddressDTO,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const data = await this.driverService.uploadProofOfAddress(auth, file)
+    const data = await this.driverService.uploadProofOfAddress(auth, file, body)
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    return this.response.sendSuccess(res, StatusCodes.OK, {
+      data,
+      message: "Proof of Address has been submitted succesfully"
+    })
   }
 
   @Post('/vehicle')
@@ -109,7 +114,6 @@ export class DriverController {
 
     return this.response.sendSuccess(res, StatusCodes.OK, { data })
   }
-
 
   @Delete('/vehicle/:vehicleId/delete')
   @Roles(Role.DRIVER, Role.ADMIN, Role.MODERATOR)

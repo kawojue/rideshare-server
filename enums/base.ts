@@ -45,4 +45,5 @@ export enum TimeToMilli {
     ThirtyDays = 30 * 24 * 60 * 60 * 1000,
     SixtyDays = 60 * 24 * 60 * 60 * 1000,
     OneHundredTwentyDays = 120 * 24 * 60 * 60 * 1000,
+    TwoWeeks = 14 * 24 * 60 * 60 * 1000
 }
