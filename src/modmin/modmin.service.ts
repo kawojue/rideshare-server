@@ -5,7 +5,11 @@ import {
     TransferStatus,
     WithdrwalRequest,
 } from '@prisma/client'
-import { Mutex } from 'async-mutex'
+import {
+    FilterBy,
+    SignupPromoDTO,
+    FetchPromosDTO,
+} from './dto/promo.dto'
 import {
     Injectable,
     NotFoundException,
@@ -14,6 +18,7 @@ import {
     BadRequestException,
     UnauthorizedException,
 } from '@nestjs/common'
+import { Mutex } from 'async-mutex'
 import { Utils } from 'helpers/utils'
 import { avatars } from 'utils/avatars'
 import { TimeToMilli } from 'enums/base'
@@ -469,6 +474,170 @@ export class ModminService {
         return {
             data,
             message: `Proof of Address has been ${data.addressVerified ? 'Approved' : 'Disapproved'}`
+        }
+    }
+
+
+    async getPromo(key: string, findBy: 'code' | 'id') {
+        const promo = await this.prisma.signupPromo.findUnique({
+            where: findBy === 'code' ? { code: key } : { id: key },
+        })
+
+        return promo
+    }
+
+    async createPromo(
+        { sub }: JwtDecoded,
+        {
+            code,
+            title,
+            expiry,
+            reward,
+            max = 50,
+        }: SignupPromoDTO
+    ) {
+        const expiry_date = expiry ? new Date(expiry) : null
+
+        if (expiry) {
+            if (new Date() > expiry_date) {
+                throw new BadRequestException('Invalid date')
+            }
+        }
+
+        const promo = await this.getPromo(code, 'code')
+        if (promo) {
+            throw new ConflictException('Promo code already exist')
+        }
+
+        const data = await this.prisma.signupPromo.create({
+            data: {
+                code,
+                title,
+                reward,
+                constraint: max,
+                expiry: expiry_date,
+                modmin: { connect: { id: sub } }
+            },
+        })
+
+        return {
+            data: { ...data, status: 'Active' },
+            message: "Promo Code created successfully"
+        }
+    }
+
+    async deletePromo(promoId: string) {
+        const promo = await this.getPromo(promoId, 'id')
+        if (!promo) {
+            throw new NotFoundException('Promo not found')
+        }
+
+        await this.prisma.signupPromo.delete({ where: { id: promoId } })
+    }
+
+    async togglePromo(promoId: string) {
+        const promo = await this.getPromo(promoId, 'id')
+        if (!promo) {
+            throw new NotFoundException('Promo not found')
+        }
+
+        const data = await this.prisma.signupPromo.update({
+            where: { id: promoId },
+            data: { isActive: !promo.isActive },
+        })
+
+        return {
+            data: { ...data, status: data.isActive ? 'Active' : 'Disabled' },
+            message: "Promo code status has been updated"
+        }
+    }
+
+    async fetchPromos({
+        endDate,
+        page = 1,
+        filterBy,
+        startDate,
+        limit = 50,
+        search = '',
+    }: FetchPromosDTO) {
+        page = Number(page)
+        limit = Number(limit)
+
+        if (isNaN(page) || isNaN(limit) || page < 1 || limit < 1) {
+            throw new BadRequestException('Invalid query parameters')
+        }
+
+        const offset = (page - 1) * limit
+
+        const dateFilter = {
+            gte:
+                startDate !== '' && !isNaN(new Date(startDate).getTime())
+                    ? new Date(startDate)
+                    : new Date(0),
+            lte:
+                endDate !== '' && !isNaN(new Date(endDate).getTime())
+                    ? new Date(endDate)
+                    : new Date(),
+        }
+
+        const whereClause: Prisma.SignupPromoWhereInput = {
+            OR: [
+                { code: { contains: search, mode: 'insensitive' } },
+                { title: { contains: search, mode: 'insensitive' } },
+            ],
+            createdAt: dateFilter,
+        }
+
+        if (filterBy) {
+            if (filterBy === FilterBy.ACTIVE) {
+                whereClause.isActive = true
+                whereClause.expiry = {
+                    gte: new Date(),
+                }
+            } else if (filterBy === FilterBy.EXPIRED) {
+                whereClause.expiry = {
+                    lte: new Date(),
+                }
+            } else if (filterBy === FilterBy.DISABLED) {
+                whereClause.isActive = false
+            }
+        }
+
+        const promos = await this.prisma.signupPromo.findMany({
+            where: whereClause,
+            skip: offset,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+        })
+
+        const promosWithStatus = promos.map((promo) => {
+            let status = promo.isActive ? 'Active' : 'Disabled'
+
+            if (promo?.expiry) {
+                if (new Date() > new Date(promo.expiry)) {
+                    status = 'Expired'
+                }
+            }
+
+            return { ...promo, status }
+        })
+
+        const total = await this.prisma.signupPromo.count({ where: whereClause })
+
+        const totalPage = Math.ceil(total / limit)
+        const hasNext = page < totalPage
+        const hasPrev = page > 1
+
+        return {
+            data: promosWithStatus,
+            metadata: {
+                total,
+                totalPage,
+                page,
+                limit,
+                hasNext,
+                hasPrev,
+            },
         }
     }
 }

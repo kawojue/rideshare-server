@@ -14,7 +14,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq'
 import { StoreService } from 'src/store/store.service'
 
 @Processor('transfer-queue')
-export class ChargeSuccess extends WorkerHost {
+export class TransferConsumer extends WorkerHost {
     constructor(
         private readonly store: StoreService,
         private readonly event: EventEmitter2,
@@ -35,7 +35,7 @@ export class ChargeSuccess extends WorkerHost {
             switch (name) {
                 case 'transfer.success':
                     await this.updateTransactionStatus(reference, status)
-                    this.emitSuccessNotifications(transaction, transaction.amount.toNumber())
+                    await this.emitSuccessNotifications(transaction, transaction.amount.toNumber())
                     break
                 case 'transfer.reversed':
                 case 'transfer.failed':
@@ -52,7 +52,7 @@ export class ChargeSuccess extends WorkerHost {
             const amount = this.calculateTotalAmount(data.amount, +transaction.totalFee)
             await this.updateUserBalance(transaction.userId, amount)
 
-            this.emitReversalNotifications(
+            await this.emitReversalNotifications(
                 transaction.userId,
                 transaction.reference,
                 amount,
@@ -61,7 +61,7 @@ export class ChargeSuccess extends WorkerHost {
         }
     }
 
-    private emitSuccessNotifications(transaction: any, amount: number) {
+    private async emitSuccessNotifications(transaction: any, amount: number) {
         this.event.emit(
             'notification.in-app',
             new CreateInAppNotificationEvent({
@@ -94,7 +94,7 @@ export class ChargeSuccess extends WorkerHost {
         )
     }
 
-    private emitReversalNotifications(userId: string, reference: string, amount: number, phone: string) {
+    private async emitReversalNotifications(userId: string, reference: string, amount: number, phone: string) {
         this.event.emit(
             'notification.push',
             new CreatePushNotificationEvent({

@@ -13,7 +13,7 @@ import { StoreService } from 'src/store/store.service'
 import { TransferStatus, TxHistory, User } from '@prisma/client'
 
 @Processor('charge.success-queue')
-export class ChargeSuccess extends WorkerHost {
+export class ChargeSuccessConsumer extends WorkerHost {
     constructor(
         private readonly store: StoreService,
         private readonly event: EventEmitter2,
@@ -68,7 +68,7 @@ export class ChargeSuccess extends WorkerHost {
                         })
                     ])
 
-                    this.emitNotifications(customer, newTransaction)
+                    await this.emitNotifications(customer, newTransaction)
                 } catch (err) {
                     console.error(err)
                     throw err
@@ -80,7 +80,7 @@ export class ChargeSuccess extends WorkerHost {
         }
     }
 
-    private emitNotifications(user: User, transaction: TxHistory) {
+    private async emitNotifications(user: User, transaction: TxHistory) {
         this.event.emit(
             'notification.in-app',
             new CreateInAppNotificationEvent({

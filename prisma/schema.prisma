@@ -24,6 +24,7 @@ model User {
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
   lastUsedBiometricAt DateTime?     @map("last_used_biometric_at")
+  promoUsers          PromoUser?
 
   inbox        Inbox?
   wallet       Wallet?
@@ -87,6 +88,42 @@ model MobileDevice {
   @@unique([userId, deviceId])
   @@index([createdAt, updatedAt])
   @@map("mobile_devices")
+}
+
+model SignupPromo {
+  id         String    @id @default(uuid()) @db.Uuid
+  code       String    @unique
+  signups    Int       @default(0)
+  reward     Decimal   @db.Decimal(10, 2)
+  constraint Int       @default(50)
+  isActive   Boolean   @default(true) @map("is_active")
+  title      String?
+  expiry     DateTime?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  promoUsers PromoUser[]
+
+  modmin   Modmin @relation(references: [id], fields: [modminId])
+  modminId String @db.Uuid
+
+  @@index([code])
+  @@index([createdAt, updatedAt])
+  @@map("signup_promos")
+}
+
+model PromoUser {
+  id        String   @id @default(uuid()) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  signupPromo SignupPromo? @relation(fields: [signupPromoId], references: [id])
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  userId        String  @unique @map("user_id") @db.Uuid
+  signupPromoId String? @map("signup_promo_id") @db.Uuid
+
+  @@map("promo_users")
 }
 
 model Verification {
@@ -317,6 +354,7 @@ model Modmin {
   withdrawalRequests WithdrwalRequest[]
   sentMessages       Message[]          @relation("ModminSentMessages")
   receivedMessages   Message[]          @relation("ModminReceivedMessages")
+  promos             SignupPromo[]
 
   @@index([role])
   @@index([status])

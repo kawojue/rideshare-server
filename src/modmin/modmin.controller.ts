@@ -6,6 +6,7 @@ import {
   Param,
   Query,
   Patch,
+  Delete,
   UseGuards,
   Controller,
 } from '@nestjs/common'
@@ -26,6 +27,7 @@ import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
 import { GetAuthParam } from 'src/jwt/auth-param.decorator'
 import { FetchModminsDTO, } from 'src/app/dto/pagination.dto'
 import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
+import { FetchPromosDTO, SignupPromoDTO } from './dto/promo.dto'
 
 @ApiTags("Moderator & Admin")
 @Controller('modmins')
@@ -124,6 +126,44 @@ export class ModminController {
     @Body() body: WithdrawalRequestDTO,
   ) {
     const data = await this.modminService.verifyProofOfAddress(driverId, body)
+
+    return this.response.sendSuccess(res, StatusCodes.OK, data)
+  }
+
+  @Post('/promos')
+  async createPromo(
+    @Res() res: Response,
+    @Body() body: SignupPromoDTO,
+    @GetAuthParam() auth: JwtDecoded,
+  ) {
+    const data = await this.modminService.createPromo(auth, body)
+
+    return this.response.sendSuccess(res, StatusCodes.Created, data)
+  }
+
+  @Get('/promos')
+  async fetchPromos(@Res() res: Response, @Query() q: FetchPromosDTO) {
+    const data = await this.modminService.fetchPromos(q)
+
+    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+  }
+
+  @Delete('/promos/:promoId')
+  async deletePromo(@Res() res: Response, @Param('promoId') promoId: string) {
+    await this.modminService.deletePromo(promoId)
+
+    return this.response.sendNoContent(res)
+  }
+
+  @ApiOperation({
+    summary: 'This is to enable/disable a promo code'
+  })
+  @Patch('/promos/:promoId')
+  async togglePromoStatus(
+    @Res() res: Response,
+    @Param('promoId') promoId: string,
+  ) {
+    const data = await this.modminService.togglePromo(promoId)
 
     return this.response.sendSuccess(res, StatusCodes.OK, data)
   }

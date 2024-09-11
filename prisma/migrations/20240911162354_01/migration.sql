@@ -85,6 +85,34 @@ CREATE TABLE "mobile_devices" (
 );
 
 -- CreateTable
+CREATE TABLE "signup_promos" (
+    "id" UUID NOT NULL,
+    "code" TEXT NOT NULL,
+    "signups" INTEGER NOT NULL DEFAULT 0,
+    "reward" DECIMAL(10,2) NOT NULL,
+    "constraint" INTEGER NOT NULL DEFAULT 50,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "title" TEXT,
+    "expiry" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "modminId" UUID NOT NULL,
+
+    CONSTRAINT "signup_promos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "promo_users" (
+    "id" UUID NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "user_id" UUID NOT NULL,
+    "signup_promo_id" UUID,
+
+    CONSTRAINT "promo_users_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "verification" (
     "id" UUID NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -376,6 +404,18 @@ CREATE INDEX "mobile_devices_created_at_updated_at_idx" ON "mobile_devices"("cre
 CREATE UNIQUE INDEX "mobile_devices_user_id_device_id_key" ON "mobile_devices"("user_id", "device_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "signup_promos_code_key" ON "signup_promos"("code");
+
+-- CreateIndex
+CREATE INDEX "signup_promos_code_idx" ON "signup_promos"("code");
+
+-- CreateIndex
+CREATE INDEX "signup_promos_created_at_updated_at_idx" ON "signup_promos"("created_at", "updated_at");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "promo_users_user_id_key" ON "promo_users"("user_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "verification_id_number_key" ON "verification"("id_number");
 
 -- CreateIndex
@@ -491,6 +531,15 @@ ALTER TABLE "profiles" ADD CONSTRAINT "profiles_user_id_fkey" FOREIGN KEY ("user
 
 -- AddForeignKey
 ALTER TABLE "mobile_devices" ADD CONSTRAINT "mobile_devices_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "signup_promos" ADD CONSTRAINT "signup_promos_modminId_fkey" FOREIGN KEY ("modminId") REFERENCES "admins_and_moderators"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "promo_users" ADD CONSTRAINT "promo_users_signup_promo_id_fkey" FOREIGN KEY ("signup_promo_id") REFERENCES "signup_promos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "promo_users" ADD CONSTRAINT "promo_users_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "verification" ADD CONSTRAINT "verification_driver_id_fkey" FOREIGN KEY ("driver_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

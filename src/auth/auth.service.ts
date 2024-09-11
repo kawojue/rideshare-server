@@ -325,8 +325,8 @@ export class AuthService {
     async onboarding(
         { sub }: JwtDecoded,
         {
-            gender, lastname, middlename,
-            address, as, email, firstname,
+            promoCode, gender, lastname, email,
+            address, firstname, middlename, as,
         }: OnboardingDTO
     ) {
         const user = await this.prisma.user.update({
@@ -357,6 +357,7 @@ export class AuthService {
                     email, phone: user.phone,
                     last_name: user.lastname,
                     first_name: user.firstname,
+                    promoCode, userId: user.id,
                 },
                 {
                     lifo: true,

@@ -4,7 +4,10 @@ import { BullModule } from '@nestjs/bullmq'
 import { StoreModule } from 'src/store/store.module'
 import { PrismaService } from 'prisma/prisma.service'
 import { EventEmitter2 } from '@nestjs/event-emitter'
+import { TransferConsumer } from './transfer-consumer'
 import { PaystackService } from 'libs/Paystack/paystack.service'
+import { ChargeSuccessConsumer } from './charge-sucess.consumer'
+import { CreateCustomerConsumer } from './create-customer.consumer'
 
 const SharedModule = BullModule.registerQueue(
     {
@@ -40,6 +43,9 @@ const SharedModule = BullModule.registerQueue(
         PrismaService,
         EventEmitter2,
         PaystackService,
+        TransferConsumer,
+        ChargeSuccessConsumer,
+        CreateCustomerConsumer,
     ],
     exports: [SharedModule]
 })

@@ -117,6 +117,15 @@ export class OnboardingDTO extends EmailDTO {
     @IsString()
     @IsNotEmpty()
     address: string
+
+    @ApiProperty({
+        example: 'RIDE-SHARE',
+        required: false
+    })
+    @IsString()
+    @IsOptional()
+    @Transform(({ value }) => Utils.toUpperCase(Utils.replaceSpaces(value, '-')))
+    promoCode?: string
 }
 
 export class BiometricLoginDTO {
