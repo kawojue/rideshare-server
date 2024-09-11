@@ -10,7 +10,7 @@ import { PrismaService } from 'prisma/prisma.service'
 import { Processor, WorkerHost } from '@nestjs/bullmq'
 import { PaystackService } from 'libs/Paystack/paystack.service'
 
-@Processor('create-customer')
+@Processor('create-customer-queue')
 export class CreateCustomerConsumer extends WorkerHost {
     constructor(
         private readonly event: EventEmitter2,
@@ -142,7 +142,7 @@ export class CreateCustomerConsumer extends WorkerHost {
         }
     }
 
-    async emitNotifications(userId: string, earned?: boolean, code?: string, reward?: number) {
+    private async emitNotifications(userId: string, earned?: boolean, code?: string, reward?: number) {
         this.event.emit(
             'notification.in-app',
             new CreateInAppNotificationEvent({
