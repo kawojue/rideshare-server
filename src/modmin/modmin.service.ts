@@ -245,20 +245,9 @@ export class ModminService {
             })
         ])
 
-        const totalPage = Math.ceil(total / limit)
-        const hasNext = page < totalPage
-        const hasPrev = page > 1
-
         return {
             data: modmins,
-            metadata: {
-                page,
-                limit,
-                total,
-                totalPage,
-                hasNext,
-                hasPrev,
-            }
+            metadata: Utils.paginateHelper(total, page, limit)
         }
     }
 
@@ -624,20 +613,9 @@ export class ModminService {
 
         const total = await this.prisma.signupPromo.count({ where: whereClause })
 
-        const totalPage = Math.ceil(total / limit)
-        const hasNext = page < totalPage
-        const hasPrev = page > 1
-
         return {
             data: promosWithStatus,
-            metadata: {
-                total,
-                totalPage,
-                page,
-                limit,
-                hasNext,
-                hasPrev,
-            },
+            metadata: Utils.paginateHelper(total, page, limit),
         }
     }
 }

@@ -124,10 +124,6 @@ export class UsersService {
             },
         })
 
-        const totalPages = Math.ceil(totalReviews / limit)
-        const hasNext = page < totalPages
-        const hasPrev = page > 1
-
         const reviews = await this.prisma.rating.findMany({
             where: {
                 targetUserId: userId,
@@ -157,17 +153,13 @@ export class UsersService {
 
         return {
             reviews,
-            metadata: {
-                totalPages,
-                hasNext,
-                hasPrev,
-            },
             analytics: {
                 chart,
                 total,
                 ratingsCount,
                 totalRatings,
             },
+            metadata: Utils.paginateHelper(totalReviews, page, limit),
         }
     }
 
@@ -259,10 +251,6 @@ export class UsersService {
             })
         ])
 
-        const totalPage = Math.ceil(total / limit)
-        const hasNext = page < totalPage
-        const hasPrev = page > 1
-
         if (role === "DRIVER" || sortBy === "RATING") {
             users = await Promise.all(users.map(async (user) => {
                 const totalVehicles = await this.prisma.vehicle.count({
@@ -282,14 +270,7 @@ export class UsersService {
 
         return {
             users,
-            metadata: {
-                page,
-                limit,
-                total,
-                totalPage,
-                hasNext,
-                hasPrev,
-            }
+            metadata: Utils.paginateHelper(total, page, limit)
         }
     }
 
@@ -371,20 +352,9 @@ export class UsersService {
             })
         ])
 
-        const totalPage = Math.ceil(total / limit)
-        const hasNext = page < totalPage
-        const hasPrev = page > 1
-
         return {
             histories,
-            metadata: {
-                page,
-                limit,
-                total,
-                totalPage,
-                hasNext,
-                hasPrev,
-            }
+            metadata: Utils.paginateHelper(total, page, limit)
         }
     }
 
@@ -497,20 +467,9 @@ export class UsersService {
             })
         ])
 
-        const totalPage = Math.ceil(total / limit)
-        const hasNext = page < totalPage
-        const hasPrev = page > 1
-
         return {
             histories,
-            metadata: {
-                page,
-                limit,
-                total,
-                totalPage,
-                hasNext,
-                hasPrev,
-            }
+            metadata: Utils.paginateHelper(total, page, limit)
         }
     }
 }

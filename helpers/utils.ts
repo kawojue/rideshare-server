@@ -173,4 +173,20 @@ export class Utils {
 
         return scaledRating
     }
+
+    static paginateHelper(totalItems: number, currentPage: number, limit: number) {
+        const totalPages = Math.ceil(totalItems / limit)
+        const hasNext = currentPage < totalPages
+        const hasPrev = currentPage > 1
+
+        return {
+            totalItems,
+            totalPages,
+            currentPage,
+            nextPage: hasNext ? currentPage + 1 : null,
+            previousPage: hasPrev ? currentPage - 1 : null,
+            hasNext,
+            hasPrev,
+        }
+    }
 }
