@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 
 export function render(
   html: string,
@@ -18,8 +18,28 @@ export function render(
 }
 
 export function loadTemplate(template: string): string {
-  const file = readFileSync(
+  const templatePaths = [
     join(process.cwd(), 'src', 'notification', 'templates', `${template}.html`),
-  );
-  return file.toString();
+    join(
+      process.cwd(),
+      'dist',
+      'notification',
+      'templates',
+      `${template}.html`,
+    ),
+  ];
+
+  let filePath = '';
+  for (const path of templatePaths) {
+    if (existsSync(path)) {
+      filePath = path;
+      break;
+    }
+  }
+
+  if (!filePath) {
+    throw new Error(`Template ${template}.html not found in any known paths.`);
+  }
+
+  return readFileSync(filePath).toString();
 }

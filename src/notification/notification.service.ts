@@ -7,11 +7,11 @@ import {
 import * as admin from 'firebase-admin';
 import { Injectable } from '@nestjs/common';
 import { config } from 'configs/env.config';
+import { loadTemplate, render } from './render';
 import { ApiService } from 'src/api/api.service';
 import { PrismaService } from 'prisma/prisma.service';
 import { MailerService } from '@nestjs-modules/mailer';
 import { getMessaging } from 'firebase-admin/messaging';
-import { loadTemplate, render } from 'src/notification/templates/render';
 
 @Injectable()
 export class NotificationService {
