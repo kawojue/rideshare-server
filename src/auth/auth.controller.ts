@@ -5,7 +5,7 @@ import {
   VerifySigninDTO,
   BiometricLoginDTO,
   EmergencyContactDTO,
-} from './dto/auth.dto'
+} from './dto/auth.dto';
 import {
   Get,
   Put,
@@ -18,73 +18,73 @@ import {
   Controller,
   UploadedFile,
   UseInterceptors,
-} from '@nestjs/common'
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiConsumes,
   ApiOperation,
   ApiBearerAuth,
-} from '@nestjs/swagger'
-import { Role } from '@prisma/client'
-import { Utils } from 'helpers/utils'
-import { Request, Response } from 'express'
-import { AuthService } from './auth.service'
-import { Roles } from 'src/jwt/role.decorator'
-import { StatusCodes } from 'enums/statusCodes'
-import { ResponseService } from 'libs/response.service'
-import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
-import { OnboardingGuard } from 'src/jwt/onboarding.guard'
-import { FileInterceptor } from '@nestjs/platform-express'
-import { GetAuthParam } from 'src/jwt/auth-param.decorator'
+} from '@nestjs/swagger';
+import { Role } from '@prisma/client';
+import { Utils } from 'helpers/utils';
+import { Request, Response } from 'express';
+import { AuthService } from './auth.service';
+import { Roles } from 'src/jwt/role.decorator';
+import { StatusCodes } from 'enums/statusCodes';
+import { ResponseService } from 'libs/response.service';
+import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard';
+import { OnboardingGuard } from 'src/jwt/onboarding.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { GetAuthParam } from 'src/jwt/auth-param.decorator';
 
-@ApiTags("Auth")
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly response: ResponseService,
-  ) { }
+  ) {}
 
   @Post('/send-otp')
   async sendOtp(@Res() res: Response, @Body() body: SigninDTO) {
-    const data = await this.authService.sendOtp(body)
+    const data = await this.authService.sendOtp(body);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @Post('/signin')
   async signin(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: VerifySigninDTO
+    @Body() body: VerifySigninDTO,
   ) {
-    const data = await this.authService.verifySignin(req, body)
+    const data = await this.authService.verifySignin(req, body);
 
-    await this.authService.setCookie(res, data)
+    await this.authService.setCookie(res, data);
 
-    Utils.sanitizeData<typeof data>(data, ['refresh_token'])
-    return this.response.sendSuccess(res, StatusCodes.Created, { data })
+    Utils.sanitizeData<typeof data>(data, ['refresh_token']);
+    return this.response.sendSuccess(res, StatusCodes.Created, { data });
   }
 
   @Get('google/signin')
   async googleSignin(
     @Res() res: Response,
     @Req() req: Request,
-    @Body() body: GoogleSigninDTO
+    @Body() body: GoogleSigninDTO,
   ) {
-    const data = await this.authService.verifyGoogleSignin(req, body)
+    const data = await this.authService.verifyGoogleSignin(req, body);
 
-    await this.authService.setCookie(res, data)
+    await this.authService.setCookie(res, data);
 
-    Utils.sanitizeData<typeof data>(data, ['refresh_token'])
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    Utils.sanitizeData<typeof data>(data, ['refresh_token']);
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @Post('/biometric/signin')
   async biometricSignin(@Res() res: Response, @Body() body: BiometricLoginDTO) {
-    const data = await this.authService.biometricSignin(body)
+    const data = await this.authService.biometricSignin(body);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @ApiBearerAuth()
@@ -95,29 +95,32 @@ export class AuthController {
     @Body() body: OnboardingDTO,
     @GetAuthParam() auth: JwtDecoded,
   ) {
-    const data = await this.authService.onboarding(auth, body)
+    const data = await this.authService.onboarding(auth, body);
 
-    await this.authService.setCookie(res, data)
+    await this.authService.setCookie(res, data);
 
-    Utils.sanitizeData<typeof data>(data, ['refresh_token'])
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    Utils.sanitizeData<typeof data>(data, ['refresh_token']);
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @ApiBearerAuth()
   @Patch('/biometric/toggle')
   @UseGuards(JwtRoleAuthGuard)
   @Roles(Role.DRIVER, Role.PASSENGER)
-  async toggleBiometric(@Res() res: Response, @GetAuthParam() auth: JwtDecoded) {
-    const { profile: data } = await this.authService.toggleBiometric(auth)
+  async toggleBiometric(
+    @Res() res: Response,
+    @GetAuthParam() auth: JwtDecoded,
+  ) {
+    const { profile: data } = await this.authService.toggleBiometric(auth);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @Post('/refresh/access-token')
   async refreshAccessToken(@Res() res: Response, @Req() req: Request) {
-    const data = await this.authService.refreshAccessToken(req)
+    const data = await this.authService.refreshAccessToken(req);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @ApiBearerAuth()
@@ -130,11 +133,11 @@ export class AuthController {
   async uploadAvatar(
     @Res() res: Response,
     @GetAuthParam() auth: JwtDecoded,
-    @UploadedFile() file: Express.Multer.File
+    @UploadedFile() file: Express.Multer.File,
   ) {
-    const payload = await this.authService.uploadAvatar(file, auth)
+    const payload = await this.authService.uploadAvatar(file, auth);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data: payload })
+    return this.response.sendSuccess(res, StatusCodes.OK, { data: payload });
   }
 
   @ApiBearerAuth()
@@ -146,8 +149,8 @@ export class AuthController {
     @GetAuthParam() auth: JwtDecoded,
     @Body() body: EmergencyContactDTO,
   ) {
-    const data = await this.authService.emergencyContact(auth, body)
+    const data = await this.authService.emergencyContact(auth, body);
 
-    return this.response.sendSuccess(res, StatusCodes.Created, { data })
+    return this.response.sendSuccess(res, StatusCodes.Created, { data });
   }
 }

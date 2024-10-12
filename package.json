@@ -10,8 +10,8 @@
   },
   "scripts": {
     "prebuild": "rimraf dist",
-    "build": "npx prisma generate && npx prisma migrate deploy && nest build",
     "postbuild": "node copy-templates.js",
+    "build": "npx prisma generate && npx prisma migrate deploy && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

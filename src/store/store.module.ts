@@ -1,11 +1,8 @@
-import { Module } from '@nestjs/common'
-import { config } from 'configs/env.config'
-import { StoreService } from './store.service'
-import { redisStore } from 'cache-manager-redis-store'
-import { CacheModule, CacheStore } from '@nestjs/cache-manager'
+import { Module } from '@nestjs/common';
+import { StoreService } from './store.service';
 
 @Module({
   providers: [StoreService],
   exports: [StoreService],
 })
-export class StoreModule { }
+export class StoreModule {}

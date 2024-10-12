@@ -1,4 +1,4 @@
-import { registerAs } from '@nestjs/config'
-import { config } from 'configs/env.config'
+import { registerAs } from '@nestjs/config';
+import { config } from 'configs/env.config';
 
-export default registerAs('cloudinary', () => (config.cloudinary))
+export default registerAs('cloudinary', () => config.cloudinary);

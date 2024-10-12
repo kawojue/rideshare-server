@@ -67,9 +67,7 @@ export class NotificationService {
       html,
       from: event.from,
       subject: event.subject,
-      attachments: Array.isArray(event.attachments)
-        ? event.attachments
-        : Array.of(event.attachments),
+      attachments: event.attachments as any,
     });
   }
 

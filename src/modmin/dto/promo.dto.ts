@@ -7,10 +7,10 @@ import {
   MinLength,
   IsNotEmpty,
   IsOptional,
-} from 'class-validator'
-import { Utils } from 'helpers/utils'
-import { ApiProperty } from '@nestjs/swagger'
-import { Transform } from 'class-transformer'
+} from 'class-validator';
+import { Utils } from 'helpers/utils';
+import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 
 export class SignupPromoDTO {
   @ApiProperty({
@@ -21,7 +21,7 @@ export class SignupPromoDTO {
   @MaxLength(8)
   @MinLength(8)
   @Transform(({ value }) => Utils.toUpperCase(Utils.replaceSpaces(value, '-')))
-  code: string
+  code: string;
 
   @ApiProperty({
     example: 'New Users',
@@ -29,7 +29,7 @@ export class SignupPromoDTO {
   })
   @IsOptional()
   @IsString()
-  title?: string
+  title?: string;
 
   @ApiProperty({
     example: 100,
@@ -38,7 +38,7 @@ export class SignupPromoDTO {
   })
   @Min(1)
   @IsOptional()
-  max: number
+  max: number;
 
   @ApiProperty({
     example: 3000,
@@ -46,14 +46,14 @@ export class SignupPromoDTO {
   @Min(0.1)
   @IsNumber()
   @IsNotEmpty()
-  reward: number
+  reward: number;
 
   @ApiProperty({
     example: new Date().toISOString(),
     required: false,
   })
   @IsOptional()
-  expiry?: string
+  expiry?: string;
 }
 
 export enum FilterBy {
@@ -69,7 +69,7 @@ export class FetchPromosDTO {
   })
   @IsOptional()
   @IsEnum(FilterBy)
-  filterBy?: FilterBy
+  filterBy?: FilterBy;
 
   @ApiProperty({
     example: 'Fetch',
@@ -77,7 +77,7 @@ export class FetchPromosDTO {
   })
   @IsString()
   @IsOptional()
-  search?: string
+  search?: string;
 
   @ApiProperty({
     example: '2024-01-01T00:00:00.000Z',
@@ -85,26 +85,26 @@ export class FetchPromosDTO {
     required: false,
   })
   @IsOptional()
-  startDate?: string
+  startDate?: string;
 
   @ApiProperty({
     example: new Date(),
     required: false,
   })
   @IsOptional()
-  endDate?: string
+  endDate?: string;
 
   @ApiProperty({
     example: 1,
     required: false,
   })
   @IsOptional()
-  page?: number
+  page?: number;
 
   @ApiProperty({
     example: 20,
     required: false,
   })
   @IsOptional()
-  limit?: number
+  limit?: number;
 }

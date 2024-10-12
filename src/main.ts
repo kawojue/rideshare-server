@@ -2,13 +2,15 @@ import * as express from 'express';
 import * as passport from 'passport';
 import * as session from 'express-session';
 import { NestFactory } from '@nestjs/core';
+import { config } from 'configs/env.config';
 import { AppModule } from './app/app.module';
 import * as cookieParser from 'cookie-parser';
 import { CustomValidationPipe } from 'helpers/validations';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
+let PORT: number;
 async function bootstrap() {
-  const PORT: number = parseInt(process.env.PORT, 10) || 3001;
+  PORT = config.port;
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
@@ -29,7 +31,7 @@ async function bootstrap() {
     session({
       resave: false,
       saveUninitialized: false,
-      secret: process.env.SESSION_SECRET!,
+      secret: config.session.secret,
     }),
   );
   app.use(passport.session());
@@ -53,11 +55,9 @@ async function bootstrap() {
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerOptions);
   SwaggerModule.setup('docs', app, swaggerDocument);
 
-  try {
-    await app.listen(PORT);
-    console.log(`http://localhost:${PORT}`);
-  } catch (err) {
-    console.error(err);
-  }
+  await app.listen(PORT);
 }
-bootstrap();
+
+bootstrap()
+  .then(() => console.info(`http://localhost:${PORT}`))
+  .catch((err) => console.error(err));

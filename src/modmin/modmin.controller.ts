@@ -9,49 +9,45 @@ import {
   Delete,
   UseGuards,
   Controller,
-} from '@nestjs/common'
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-} from '@nestjs/swagger'
-import { Response } from 'express'
-import { Role } from '@prisma/client'
-import { avatars } from 'utils/avatars'
-import { Roles } from 'src/jwt/role.decorator'
-import { StatusCodes } from 'enums/statusCodes'
-import { ModminService } from './modmin.service'
-import { WithdrawalRequestDTO } from './dto/payout.dto'
-import { ResponseService } from 'libs/response.service'
-import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard'
-import { GetAuthParam } from 'src/jwt/auth-param.decorator'
-import { FetchModminsDTO, } from 'src/app/dto/pagination.dto'
-import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto'
-import { FetchPromosDTO, SignupPromoDTO } from './dto/promo.dto'
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
+import { Role } from '@prisma/client';
+import { avatars } from 'public/avatars';
+import { Roles } from 'src/jwt/role.decorator';
+import { StatusCodes } from 'enums/statusCodes';
+import { ModminService } from './modmin.service';
+import { WithdrawalRequestDTO } from './dto/payout.dto';
+import { ResponseService } from 'libs/response.service';
+import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard';
+import { GetAuthParam } from 'src/jwt/auth-param.decorator';
+import { FetchModminsDTO } from 'src/app/dto/pagination.dto';
+import { InviteNewModminDTO, LoginDTO } from './dto/auth.dto';
+import { FetchPromosDTO, SignupPromoDTO } from './dto/promo.dto';
 
-@ApiTags("Moderator & Admin")
+@ApiTags('Moderator & Admin')
 @Controller('modmins')
 export class ModminController {
   constructor(
     private readonly response: ResponseService,
-    private readonly modminService: ModminService
-  ) { }
+    private readonly modminService: ModminService,
+  ) {}
 
   @Get('/')
   @ApiBearerAuth()
   @Roles(Role.ADMIN)
   @UseGuards(JwtRoleAuthGuard)
   async fetchModmins(@Res() res: Response, @Query() q: FetchModminsDTO) {
-    const data = await this.modminService.fetchModmins(q)
+    const data = await this.modminService.fetchModmins(q);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @Post('/login')
   async login(@Res() res: Response, @Body() body: LoginDTO) {
-    const data = await this.modminService.login(body)
+    const data = await this.modminService.login(body);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @ApiBearerAuth()
@@ -59,7 +55,7 @@ export class ModminController {
   @UseGuards(JwtRoleAuthGuard)
   @Roles(Role.ADMIN, Role.MODERATOR)
   listAvatars() {
-    return { data: avatars }
+    return { data: avatars };
   }
 
   @ApiBearerAuth()
@@ -69,21 +65,24 @@ export class ModminController {
   async updateAvatar(
     @Res() res: Response,
     @GetAuthParam() auth: JwtDecoded,
-    @Param('avatarId') avatarId: string
+    @Param('avatarId') avatarId: string,
   ) {
-    const data = await this.modminService.updateAvatar(avatarId, auth)
+    const data = await this.modminService.updateAvatar(avatarId, auth);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, data)
+    return this.response.sendSuccess(res, StatusCodes.OK, data);
   }
 
   @ApiBearerAuth()
   @Roles(Role.ADMIN)
   @Post('/invite-modmin')
   @UseGuards(JwtRoleAuthGuard)
-  async inviteNewModmin(@Res() res: Response, @Body() body: InviteNewModminDTO) {
-    const data = await this.modminService.inviteNewModmin(body)
+  async inviteNewModmin(
+    @Res() res: Response,
+    @Body() body: InviteNewModminDTO,
+  ) {
+    const data = await this.modminService.inviteNewModmin(body);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, data)
+    return this.response.sendSuccess(res, StatusCodes.OK, data);
   }
 
   @ApiBearerAuth()
@@ -93,11 +92,14 @@ export class ModminController {
   async toggleAccountSuspension(
     @Res() res: Response,
     @GetAuthParam() auth: JwtDecoded,
-    @Param('accountId') accountId: string
+    @Param('accountId') accountId: string,
   ) {
-    const data = await this.modminService.toggleAccountSuspension(accountId, auth)
+    const data = await this.modminService.toggleAccountSuspension(
+      accountId,
+      auth,
+    );
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @ApiBearerAuth()
@@ -107,27 +109,27 @@ export class ModminController {
     @Res() res: Response,
     @Query() q: WithdrawalRequestDTO,
     @GetAuthParam() auth: JwtDecoded,
-    @Param('requestId') requestId: string
+    @Param('requestId') requestId: string,
   ) {
-    const data = await this.modminService.withdrawalRequest(requestId, auth, q)
+    const data = await this.modminService.withdrawalRequest(requestId, auth, q);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, data)
+    return this.response.sendSuccess(res, StatusCodes.OK, data);
   }
 
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.MODERATOR)
   @Post('/proof-of-address/:driverId')
   @ApiOperation({
-    summary: "This is to toggle Proof of Address verification"
+    summary: 'This is to toggle Proof of Address verification',
   })
   async verifyProofOfAddress(
     @Res() res: Response,
     @Param('driverId') driverId: string,
     @Body() body: WithdrawalRequestDTO,
   ) {
-    const data = await this.modminService.verifyProofOfAddress(driverId, body)
+    const data = await this.modminService.verifyProofOfAddress(driverId, body);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, data)
+    return this.response.sendSuccess(res, StatusCodes.OK, data);
   }
 
   @Post('/promos')
@@ -136,35 +138,35 @@ export class ModminController {
     @Body() body: SignupPromoDTO,
     @GetAuthParam() auth: JwtDecoded,
   ) {
-    const data = await this.modminService.createPromo(auth, body)
+    const data = await this.modminService.createPromo(auth, body);
 
-    return this.response.sendSuccess(res, StatusCodes.Created, data)
+    return this.response.sendSuccess(res, StatusCodes.Created, data);
   }
 
   @Get('/promos')
   async fetchPromos(@Res() res: Response, @Query() q: FetchPromosDTO) {
-    const data = await this.modminService.fetchPromos(q)
+    const data = await this.modminService.fetchPromos(q);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, { data })
+    return this.response.sendSuccess(res, StatusCodes.OK, { data });
   }
 
   @Delete('/promos/:promoId')
   async deletePromo(@Res() res: Response, @Param('promoId') promoId: string) {
-    await this.modminService.deletePromo(promoId)
+    await this.modminService.deletePromo(promoId);
 
-    return this.response.sendNoContent(res)
+    return this.response.sendNoContent(res);
   }
 
   @ApiOperation({
-    summary: 'This is to enable/disable a promo code'
+    summary: 'This is to enable/disable a promo code',
   })
   @Patch('/promos/:promoId')
   async togglePromoStatus(
     @Res() res: Response,
     @Param('promoId') promoId: string,
   ) {
-    const data = await this.modminService.togglePromo(promoId)
+    const data = await this.modminService.togglePromo(promoId);
 
-    return this.response.sendSuccess(res, StatusCodes.OK, data)
+    return this.response.sendSuccess(res, StatusCodes.OK, data);
   }
 }

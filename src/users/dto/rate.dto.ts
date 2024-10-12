@@ -1,42 +1,48 @@
-import { RatingPoint } from 'enums/base'
-import { ApiProperty } from '@nestjs/swagger'
-import { Transform } from 'class-transformer'
-import { InfiniteScrollDTO } from './pagination.dto'
 import {
-    IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength
-} from 'class-validator'
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+import { RatingPoint } from 'enums/base';
+import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { InfiniteScrollDTO } from './pagination.dto';
 
 export class RatingDTO {
-    @ApiProperty({
-        example: 'He almost kidnapped me!!!'
-    })
-    @IsString()
-    @IsNotEmpty()
-    @IsOptional()
-    @MaxLength(150)
-    @Transform(({ value }) => value?.trim())
-    review?: string
+  @ApiProperty({
+    example: 'He almost kidnapped me!!!',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  @MaxLength(150)
+  @Transform(({ value }) => value?.trim())
+  review?: string;
 
-    @ApiProperty({
-        example: "ONE",
-    })
-    @IsNotEmpty()
-    @Transform(({ value }) => Number(RatingPoint[value]))
-    @IsEnum(RatingPoint, {
-        message: "point must be one of the following values: 0NE, TWO, THREE, FOUR, FIVE"
-    })
-    point: RatingPoint
+  @ApiProperty({
+    example: 'ONE',
+  })
+  @IsNotEmpty()
+  @Transform(({ value }) => Number(RatingPoint[value]))
+  @IsEnum(RatingPoint, {
+    message:
+      'point must be one of the following values: 0NE, TWO, THREE, FOUR, FIVE',
+  })
+  point: RatingPoint;
 }
 
 export class FetchRatingAndReviewsDTO extends InfiniteScrollDTO {
-    @ApiProperty({
-        example: "THREE",
-        required: false,
-    })
-    @IsOptional()
-    @Transform(({ value }) => Number(RatingPoint[value]))
-    @IsEnum(RatingPoint, {
-        message: "point must be one of the following values: 0NE, TWO, THREE, FOUR, FIVE"
-    })
-    point?: RatingPoint
+  @ApiProperty({
+    example: 'THREE',
+    required: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) => Number(RatingPoint[value]))
+  @IsEnum(RatingPoint, {
+    message:
+      'point must be one of the following values: 0NE, TWO, THREE, FOUR, FIVE',
+  })
+  point?: RatingPoint;
 }
