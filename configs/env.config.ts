@@ -60,6 +60,6 @@ export const config = {
     username: process.env.REDIS_USERNAME,
     password: process.env.REDIS_PASSWORD,
     port: parseInt(process.env.REDIS_PORT, 10),
-    database: parseInt(process.env.REDIS_DATABASE) ?? 0,
+    database: parseInt(process.env.REDIS_DATABASE, 10) ?? 0,
   },
 };
