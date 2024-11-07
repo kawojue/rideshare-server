@@ -5,22 +5,22 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { Queue } from 'bullmq';
+import { Queue } from 'bull';
 import { Response } from 'express';
 import { Mutex } from 'async-mutex';
 import { Utils } from 'helpers/utils';
 import { TimeToMilli } from 'enums/base';
+import { InjectQueue } from '@nestjs/bull';
 import {
   CreatePushNotificationEvent,
   CreateInAppNotificationEvent,
 } from 'src/notification/notification.event';
-import { InjectQueue } from '@nestjs/bullmq';
 import { StatusCodes } from 'enums/statusCodes';
 import { ValidateBankDTO } from './dto/bank.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'prisma/prisma.service';
 import { StoreService } from 'src/store/store.service';
-import { ResponseService } from 'libs/response.service';
+import { ResponseService } from 'src/response/response.service';
 import { RequestWidrawalDTO, FundWalletDTO } from './dto/tx.dto';
 import { PaystackService } from 'libs/Paystack/paystack.service';
 import { TransferStatus, WithdrwalRequest } from '@prisma/client';
@@ -33,8 +33,7 @@ export class WalletService {
     private readonly prisma: PrismaService,
     private readonly response: ResponseService,
     private readonly paystack: PaystackService,
-    @InjectQueue('transfer-queue') private transferQueue: Queue,
-    @InjectQueue('charge.sucsess-queue') private chargeSucessQueue: Queue,
+    @InjectQueue('transaction-queue') private transactionQueue: Queue,
   ) {}
 
   async bankAccountVerification({
@@ -175,10 +174,6 @@ export class WalletService {
 
     const release = await userMutex.acquire();
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: sub },
-    });
-
     const verifyTx = await this.paystack.verifyTransaction(reference);
     if (!verifyTx.status || verifyTx?.data?.status !== 'success') {
       throw new HttpException(
@@ -246,19 +241,21 @@ export class WalletService {
   async manageWebhookEvents(body: TransferEvent | ChargeSuccessEvent) {
     switch (body.event) {
       case 'charge.success':
-        await this.chargeSucessQueue.add('charge.sucsess-queue', body.data);
+        this.transactionQueue.add('charge.sucsess', body.data);
         break;
 
       case 'transfer.success':
-        await this.transferQueue.add('transfer.success', body.data);
+        this.transactionQueue.add('transfer.success', body.data);
         break;
 
       case 'transfer.failed':
-        await this.transferQueue.add('transfer.failed', body.data);
+        this.transactionQueue.add('transfer.failed-reverse', body.data);
         break;
 
       case 'transfer.reversed':
-        await this.transferQueue.add('transfer.reversed', body.data);
+        this.transactionQueue.add('transfer.failed-reverse', body.data, {
+          delay: TimeToMilli.OneHour,
+        });
         break;
 
       default:

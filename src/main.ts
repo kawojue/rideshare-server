@@ -1,3 +1,4 @@
+import { v4 as uuid } from 'uuid';
 import * as express from 'express';
 import * as passport from 'passport';
 import * as session from 'express-session';
@@ -18,7 +19,7 @@ async function bootstrap() {
       'http://localhost:3000',
       'http://localhost:3001',
       `http://localhost:${PORT}`,
-      'https://api.rideshareng.com',
+      'https://mobileapi.rideshareng.com',
     ],
     credentials: true,
     optionsSuccessStatus: 200,
@@ -29,9 +30,13 @@ async function bootstrap() {
   app.use(cookieParser());
   app.use(
     session({
+      genid: function (req) {
+        return uuid();
+      },
       resave: false,
       saveUninitialized: false,
       secret: config.session.secret,
+      cookie: { secure: config.isProd },
     }),
   );
   app.use(passport.session());
@@ -47,7 +52,7 @@ async function bootstrap() {
   const swaggerOptions = new DocumentBuilder()
     .setTitle('RideShare API')
     .setVersion('1.7.2')
-    .addServer(`https://api.rideshareng.com`, 'Staging')
+    .addServer(`https://mobileapi.rideshareng.com`, 'Staging')
     .addServer(`http://localhost:${PORT}`, 'Local')
     .addBearerAuth()
     .build();
@@ -60,4 +65,7 @@ async function bootstrap() {
 
 bootstrap()
   .then(() => console.info(`http://localhost:${PORT}`))
-  .catch((err) => console.error(err));
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

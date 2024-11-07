@@ -1,4 +1,11 @@
-import { Job } from 'bullmq';
+import {
+  Process,
+  Processor,
+  OnQueueActive,
+  OnQueueFailed,
+  OnQueueCompleted,
+} from '@nestjs/bull';
+import { Job } from 'bull';
 import { config } from 'configs/env.config';
 import {
   CreatePushNotificationEvent,
@@ -7,20 +14,20 @@ import {
 } from 'src/notification/notification.event';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'prisma/prisma.service';
-import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { PaystackService } from 'libs/Paystack/paystack.service';
 
-@Processor('create-customer-queue')
-export class CreateCustomerConsumer extends WorkerHost {
+@Processor('customer-queue')
+export class CustomerConsumer {
   constructor(
     private readonly event: EventEmitter2,
     private readonly prisma: PrismaService,
     private readonly paystack: PaystackService,
-  ) {
-    super();
-  }
+  ) {}
 
-  async process({
+  @Process({
+    name: 'create',
+  })
+  async create({
     data: { userId, phone, promoCode, first_name, last_name, email },
   }: Job<{
     email: string;
@@ -31,6 +38,7 @@ export class CreateCustomerConsumer extends WorkerHost {
     first_name: string;
   }>) {
     let customerResponse: CreateCustomerResponse;
+
     const modminEmails = (
       await this.prisma.modmin.findMany({ select: { email: true } })
     ).map((m) => m?.email);
@@ -74,7 +82,7 @@ export class CreateCustomerConsumer extends WorkerHost {
       });
 
       if (user) {
-        let account;
+        let account: any;
         try {
           const { data: createdAccount } = await this.paystack.createDVA({
             customer: user.customerCode,
@@ -194,5 +202,25 @@ export class CreateCustomerConsumer extends WorkerHost {
         }),
       );
     }
+  }
+
+  @OnQueueActive()
+  onActive(job: Job) {
+    console.info(`(Queue) Processing: job ${job.id} of ${job.queue.name}...`);
+  }
+
+  @OnQueueCompleted()
+  async OnQueueCompleted(job: Job) {
+    console.info('(Queue) Completed: job ', job.id, job.queue.name);
+  }
+
+  @OnQueueFailed()
+  OnQueueFailed(job: Job, error: Error) {
+    console.info(
+      '(Queue) Error on: job ',
+      job.id,
+      ' -> error: ',
+      error.message,
+    );
   }
 }

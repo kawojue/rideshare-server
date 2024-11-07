@@ -18,9 +18,9 @@ import { Roles } from 'src/jwt/role.decorator';
 import { StatusCodes } from 'enums/statusCodes';
 import { WalletService } from './wallet.service';
 import { ValidateBankDTO } from './dto/bank.dto';
-import { ResponseService } from 'libs/response.service';
 import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard';
 import { GetAuthParam } from 'src/jwt/auth-param.decorator';
+import { ResponseService } from 'src/response/response.service';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequestWidrawalDTO, FundWalletDTO, AmountDTO } from './dto/tx.dto';
 

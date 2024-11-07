@@ -18,7 +18,7 @@ import { Roles } from 'src/jwt/role.decorator';
 import { StatusCodes } from 'enums/statusCodes';
 import { ModminService } from './modmin.service';
 import { WithdrawalRequestDTO } from './dto/payout.dto';
-import { ResponseService } from 'libs/response.service';
+import { ResponseService } from 'src/response/response.service';
 import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard';
 import { GetAuthParam } from 'src/jwt/auth-param.decorator';
 import { FetchModminsDTO } from 'src/app/dto/pagination.dto';

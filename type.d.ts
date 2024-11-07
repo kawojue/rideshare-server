@@ -1,73 +1,82 @@
-type Status = 'ACTIVE' | 'SUSPENDED'
-type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'MODERATOR'
+type Status = 'ACTIVE' | 'SUSPENDED';
+type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'MODERATOR';
 
 interface CloudinaryModuleOptions {
-    cloudName: string
-    apiKey: string
-    apiSecret: string
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
 }
 
 interface FileDest {
-    folder: string
-    resource_type: 'image' | 'video' | 'auto' | 'raw'
+  folder: string;
+  resource_type: 'image' | 'video' | 'auto' | 'raw';
 }
 
 interface IGenOTP {
-    max?: number
-    count?: number
-    otp?: string
-    otp_expiry?: Date
+  max?: number;
+  count?: number;
+  otp?: string;
+  otp_expiry?: Date;
 }
 
 interface JwtPayload {
-    sub: string
-    role?: Roles
-    status?: Status
-    deviceId?: string
+  sub: string;
+  role?: Roles;
+  status?: Status;
+  deviceId?: string;
 }
 
 interface JwtDecoded extends JwtPayload {
-    iat: number
-    exp: number
+  iat: number;
+  exp: number;
+
+  email: string;
+  phone: string;
+  lastname: string;
+  firstname: string;
+  middlename: string;
+  regionCode: string;
+  countryCode: string;
+  customerCode: string;
 }
 
 interface Attachment {
-    size: number,
-    type: string,
-    url: string,
-    public_id: string,
+  size: number;
+  type: string;
+  url: string;
+  public_id: string;
 }
 
 interface Fee {
-    totalFee: number
-    paystackFee: number
-    processingFee: number
+  totalFee: number;
+  paystackFee: number;
+  processingFee: number;
 }
 
 interface Avatar {
-    id: number
-    url: string
+  id: number;
+  url: string;
 }
 
 interface PushNotification {
-    title: string
-    body: string
-    userId?: string
+  title: string;
+  body: string;
+  userId?: string;
 }
 
 interface EmailAttachment {
-    content: string
-    mimeType: string
-    name: string
+  content: string;
+  mimeType: string;
+  name: string;
 }
 
 interface AfricasTalkingResponse {
-    Message: string
-    Recipients: {
-        statusCode: number
-        number: string
-        status: string
-        cost: string
-        messageId: string
-    }[]
+  Message: string;
+  Recipients: {
+    statusCode: number;
+    number: string;
+    status: string;
+    cost: string;
+    messageId: string;
+  }[];
 }

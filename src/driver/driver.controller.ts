@@ -27,7 +27,7 @@ import { Role } from '@prisma/client';
 import { Roles } from 'src/jwt/role.decorator';
 import { StatusCodes } from 'enums/statusCodes';
 import { DriverService } from './driver.service';
-import { ResponseService } from 'libs/response.service';
+import { ResponseService } from 'src/response/response.service';
 import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { GetAuthParam } from 'src/jwt/auth-param.decorator';

@@ -62,7 +62,7 @@ export class NotificationService {
 
     const html = event?.dynamic ? event.template : render(template, event.data);
 
-    await this.mail.sendMail({
+    this.mail.sendMail({
       to: event.emails,
       html,
       from: event.from,
@@ -79,7 +79,7 @@ export class NotificationService {
     params.append('from', config.africasTalking.shortCode);
     params.append('username', config.africasTalking.username);
 
-    await this.api.POST<AfricasTalkingResponse>(
+    this.api.POST<AfricasTalkingResponse>(
       `${config.africasTalking.baseUrl}/messaging?${params.toString()}`,
       {},
       {
@@ -95,7 +95,7 @@ export class NotificationService {
     title,
     userId,
   }: CreateInAppNotificationEvent) {
-    await this.prisma.notification.create({
+    this.prisma.notification.create({
       data: {
         title,
         topic,

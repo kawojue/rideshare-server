@@ -1,24 +1,18 @@
 import { Module } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DriverService } from './driver.service';
 import { PassportModule } from '@nestjs/passport';
-import { PrismaService } from 'prisma/prisma.service';
 import { DriverController } from './driver.controller';
-import { ResponseService } from 'libs/response.service';
+import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 @Module({
-  imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
-  controllers: [DriverController],
-  providers: [
-    DriverService,
-    JwtService,
-    PrismaService,
-    ConfigService,
-    ResponseService,
-    CloudinaryService,
+  imports: [
+    CloudinaryModule,
+    PassportModule.register({ defaultStrategy: 'jwt' }),
   ],
+  controllers: [DriverController],
+  providers: [DriverService, ConfigService, CloudinaryService],
   exports: [DriverService],
 })
 export class DriverModule {}

@@ -31,7 +31,7 @@ import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { Roles } from 'src/jwt/role.decorator';
 import { StatusCodes } from 'enums/statusCodes';
-import { ResponseService } from 'libs/response.service';
+import { ResponseService } from 'src/response/response.service';
 import { JwtRoleAuthGuard } from 'src/jwt/auth-role.guard';
 import { OnboardingGuard } from 'src/jwt/onboarding.guard';
 import { FileInterceptor } from '@nestjs/platform-express';

@@ -1,19 +1,18 @@
-import { Request } from 'express';
-import { JwtService } from '@nestjs/jwt';
 import {
   Injectable,
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { config } from 'configs/env.config';
+import { Request } from 'express';
 import { AuthGuard } from '@nestjs/passport';
+import { MiscService } from 'src/misc/misc.service';
 import { PrismaService } from 'prisma/prisma.service';
 
 @Injectable()
 export class OnboardingGuard extends AuthGuard('jwt') {
   constructor(
+    private readonly misc: MiscService,
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
   ) {
     super();
   }
@@ -33,14 +32,11 @@ export class OnboardingGuard extends AuthGuard('jwt') {
       ? authHeader.substring(7)
       : null;
 
-    const access_token = cookieToken || bearerToken;
+    const access_token = bearerToken || cookieToken;
     if (!access_token) return false;
 
     try {
-      const decoded = await this.jwtService.verifyAsync(access_token, {
-        secret: config.jwt.secret,
-        ignoreExpiration: false,
-      });
+      const decoded = await this.misc.decodeToken(access_token);
 
       const user = await this.prisma.user.findUnique({
         where: { id: decoded.sub, status: decoded.status },

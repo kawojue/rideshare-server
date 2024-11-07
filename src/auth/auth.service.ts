@@ -14,26 +14,25 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Queue } from 'bullmq';
+import { Queue } from 'bull';
 import { Utils } from 'helpers/utils';
 import { UAParser } from 'ua-parser-js';
 import { JwtService } from '@nestjs/jwt';
 import { TimeToMilli } from 'enums/base';
+import { isEmail } from 'class-validator';
+import { InjectQueue } from '@nestjs/bull';
 import { Request, Response } from 'express';
 import { config } from 'configs/env.config';
 import {
   CreateSmsNotificationEvent,
   CreateEmailNotificationEvent,
 } from 'src/notification/notification.event';
-import { InjectQueue } from '@nestjs/bullmq';
-import { MiscService } from 'libs/misc.service';
+import { MiscService } from 'src/misc/misc.service';
 import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from 'prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { StoreService } from 'src/store/store.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
-
-const isEmail = require('is-email');
 
 @Injectable()
 export class AuthService {
@@ -44,9 +43,8 @@ export class AuthService {
     private readonly store: StoreService,
     private readonly event: EventEmitter2,
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
     private readonly cloudinary: CloudinaryService,
-    @InjectQueue('create-customer-queue') private createCustomer: Queue,
+    @InjectQueue('customer-queue') private customerQueue: Queue,
   ) {
     this.client = new OAuth2Client();
   }
@@ -387,8 +385,8 @@ export class AuthService {
     });
 
     if (user) {
-      await this.createCustomer.add(
-        'create-customer-queue',
+      await this.customerQueue.add(
+        'create',
         {
           email,
           phone: user.phone,
@@ -400,6 +398,7 @@ export class AuthService {
         {
           lifo: true,
           attempts: 3,
+          delay: 2000,
         },
       );
     }
@@ -432,15 +431,7 @@ export class AuthService {
   }
 
   async biometricSignin({ access_token: accessToken }: BiometricLoginDTO) {
-    let decoded: JwtDecoded;
-    try {
-      decoded = await this.jwtService.verifyAsync(accessToken, {
-        secret: config.jwt.secret,
-        ignoreExpiration: true,
-      });
-    } catch (err) {
-      throw new UnauthorizedException('Invalid token');
-    }
+    const decoded = await this.misc.decodeToken(accessToken);
 
     Utils.sanitizeData<JwtDecoded>(decoded, ['exp', 'iat']);
 

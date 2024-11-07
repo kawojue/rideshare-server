@@ -1,23 +1,22 @@
-import { Request } from 'express';
-import { Role } from '@prisma/client';
-import { JwtService } from '@nestjs/jwt';
-import { Reflector } from '@nestjs/core';
 import {
   Injectable,
   ExecutionContext,
   ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { config } from 'configs/env.config';
+import { Request } from 'express';
+import { Role } from '@prisma/client';
+import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
+import { MiscService } from 'src/misc/misc.service';
 import { PrismaService } from 'prisma/prisma.service';
 
 @Injectable()
 export class JwtRoleAuthGuard extends AuthGuard('jwt') {
   constructor(
+    private readonly misc: MiscService,
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
   ) {
     super();
   }
@@ -37,17 +36,11 @@ export class JwtRoleAuthGuard extends AuthGuard('jwt') {
       ? authHeader.substring(7)
       : null;
 
-    const access_token = cookieToken || bearerToken;
+    const access_token = bearerToken || cookieToken;
     if (!access_token) return false;
 
     try {
-      const decoded: JwtDecoded = await this.jwtService.verifyAsync(
-        access_token,
-        {
-          secret: config.jwt.secret,
-          ignoreExpiration: false,
-        },
-      );
+      const decoded: JwtDecoded = await this.misc.decodeToken(access_token);
 
       const SUPERIOR = decoded.role === 'ADMIN' || decoded.role === 'MODERATOR';
       const userOrAdmin = await (
@@ -63,7 +56,17 @@ export class JwtRoleAuthGuard extends AuthGuard('jwt') {
         return false;
       }
 
-      request.user = decoded;
+      request.user = {
+        ...decoded,
+        email: userOrAdmin?.email,
+        phone: userOrAdmin?.phone,
+        lastname: userOrAdmin?.lastname,
+        firstname: userOrAdmin?.firstname,
+        middlename: userOrAdmin?.middlename,
+        regionCode: userOrAdmin?.regionCode,
+        countryCode: userOrAdmin?.countryCode,
+        customerCode: userOrAdmin?.customerCode,
+      };
 
       const requiredRoles = this.reflector.get<Role[]>(
         'roles',

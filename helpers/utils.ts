@@ -45,6 +45,15 @@ export class Utils {
     return text.toUpperCase().trim();
   }
 
+  static formatEmail(email: string) {
+    const lowerCaseEmail = email.toLowerCase();
+    const [localPart, domainPart] = lowerCaseEmail.split('@');
+
+    const cleanedLocalPart = localPart.replace(/\./g, '');
+
+    return `${cleanedLocalPart}@${domainPart}`;
+  }
+
   static sanitizeData<T>(data: T, skipFieldNames: Array<keyof T>) {
     const removeFields = (obj: any) => {
       for (const key of skipFieldNames) {
@@ -277,9 +286,9 @@ export class Utils {
     const hasPrev = currentPage > 1;
 
     return {
+      limit,
       hasNext,
       hasPrev,
-      limit,
       totalItems,
       totalPages,
       currentPage,

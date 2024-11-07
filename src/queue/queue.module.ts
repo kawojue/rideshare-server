@@ -1,46 +1,36 @@
-import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
-import { BullModule } from '@nestjs/bullmq';
-import { StoreModule } from 'src/store/store.module';
-import { PrismaService } from 'prisma/prisma.service';
-import { TransferConsumer } from './transfer-consumer';
+import { config } from 'configs/env.config';
+import { Global, Module } from '@nestjs/common';
+import { CustomerConsumer } from './customer.consumer';
+import { TransactionsConsumer } from './transaction.consumer';
 import { PaystackService } from 'libs/Paystack/paystack.service';
-import { ChargeSuccessConsumer } from './charge-sucess.consumer';
-import { CreateCustomerConsumer } from './create-customer.consumer';
+
+const backoff = {
+  type: 'fixed',
+  delay: config.env === 'live' ? 60 * 60 * 1000 : 60 * 1000,
+};
 
 const SharedModule = BullModule.registerQueue(
   {
-    name: 'create-customer-queue',
+    name: 'customer-queue',
     defaultJobOptions: {
-      removeOnFail: true,
       removeOnComplete: true,
     },
   },
   {
-    name: 'transfer-queue',
+    name: 'transaction-queue',
     defaultJobOptions: {
-      removeOnFail: false,
       removeOnComplete: true,
-    },
-  },
-  {
-    name: 'charge.sucsess-queue',
-    defaultJobOptions: {
-      removeOnFail: false,
-      removeOnComplete: true,
+      backoff,
     },
   },
 );
 
+@Global()
 @Module({
-  imports: [HttpModule, StoreModule, SharedModule],
-  providers: [
-    PrismaService,
-    PaystackService,
-    TransferConsumer,
-    ChargeSuccessConsumer,
-    CreateCustomerConsumer,
-  ],
+  imports: [HttpModule, SharedModule],
+  providers: [PaystackService, CustomerConsumer, TransactionsConsumer],
   exports: [SharedModule],
 })
 export class QueueModule {}

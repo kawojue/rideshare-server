@@ -55,10 +55,11 @@ export const config = {
     liveKey: process.env.PAYSTACK_SECRET_LIVE_KEY,
   },
   redis: {
+    url: process.env.REDIS_URL,
     host: process.env.REDIS_HOST,
     username: process.env.REDIS_USERNAME,
     password: process.env.REDIS_PASSWORD,
     port: parseInt(process.env.REDIS_PORT, 10),
-    database: parseInt(process.env.REDIS_DATABASE),
+    database: parseInt(process.env.REDIS_DATABASE) ?? 0,
   },
 };

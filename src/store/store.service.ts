@@ -11,7 +11,7 @@ export class StoreService {
   }
 
   async set<T>(key: string, value: T, ttl?: number) {
-    await this.cache.set(key, value, ttl);
+    await this.cache.set(key, value, { ...(ttl && { ttl: ttl / 1000 }) });
   }
 
   async delete(key: string) {

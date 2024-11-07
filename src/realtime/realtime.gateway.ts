@@ -17,9 +17,9 @@ import {
 } from '@nestjs/websockets';
 import { Role } from '@prisma/client';
 import { Utils } from 'helpers/utils';
-import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { StatusCodes } from 'enums/statusCodes';
+import { MiscService } from 'src/misc/misc.service';
 import { RealtimeService } from './realtime.service';
 import { PrismaService } from 'prisma/prisma.service';
 import { StoreService } from 'src/store/store.service';
@@ -42,9 +42,9 @@ export class RealtimeGateway
   @WebSocketServer() server: Server;
 
   constructor(
+    private readonly misc: MiscService,
     private readonly store: StoreService,
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
     private readonly realtimeService: RealtimeService,
   ) {}
 
@@ -67,13 +67,12 @@ export class RealtimeGateway
       }
 
       try {
-        const { sub, role, status } = (await this.jwtService.verifyAsync(
-          token,
-          {
-            secret: process.env.JWT_SECRET,
-            ignoreExpiration: false,
-          },
-        )) as JwtPayload;
+        const decoded = await this.misc.decodeToken(token, false);
+        if (!decoded) {
+          throw new Error('Inavlid Token');
+        }
+
+        const { sub, role, status } = decoded;
 
         if (status === 'SUSPENDED') {
           client.emit('error', {
@@ -84,12 +83,12 @@ export class RealtimeGateway
         }
 
         this.clients.set(client, { sub, role, status });
-        await this.store.set(`online_${sub}`, client.id);
+        this.store.set(`online_${sub}`, client.id);
 
         client.emit('loginSuccess', { message: 'Logged in and online' });
       } catch (err) {
         client.emit('error', {
-          status: StatusCodes.InternalServerError,
+          status: StatusCodes.Forbidden,
           message: err.message,
         });
       }
@@ -99,7 +98,7 @@ export class RealtimeGateway
   async handleDisconnect(client: Socket) {
     const user = this.clients.get(client);
     if (user) {
-      await this.store.delete(`online_${user.sub}`);
+      this.store.delete(`online_${user.sub}`);
     }
     this.clients.delete(client);
   }

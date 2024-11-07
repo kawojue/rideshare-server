@@ -23,7 +23,7 @@ import {
   CreateEmailNotificationEvent,
   CreateInAppNotificationEvent,
 } from 'src/notification/notification.event';
-import { MiscService } from 'libs/misc.service';
+import { MiscService } from 'src/misc/misc.service';
 import { PrismaService } from 'prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { StoreService } from 'src/store/store.service';

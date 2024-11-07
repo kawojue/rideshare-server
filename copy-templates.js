@@ -11,4 +11,4 @@ files.forEach((file) => {
   copyFileSync(join(srcDir, file), join(destDir, file));
 });
 
-//     "postbuild": "node copy-templates.js",
+//      "postbuild": "node copy-templates.js",
