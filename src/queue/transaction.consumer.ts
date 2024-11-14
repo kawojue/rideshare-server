@@ -26,11 +26,6 @@ import { PrismaService } from 'prisma/prisma.service';
 import { StoreService } from 'src/store/store.service';
 import { DefaultArgs } from '@prisma/client/runtime/library';
 
-type PrismaTransaction = Omit<
-  PrismaClient<Prisma.PrismaClientOptions, never, DefaultArgs>,
-  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
->;
-
 @Processor('transaction-queue')
 export class TransactionsConsumer {
   constructor(
@@ -154,7 +149,10 @@ export class TransactionsConsumer {
     );
   }
 
-  private async getTransaction(prisma: PrismaTransaction, reference: string) {
+  private async getTransaction(
+    prisma: Prisma.TransactionClient,
+    reference: string,
+  ) {
     return await prisma.txHistory.findUnique({
       where: { reference },
       include: {
@@ -169,7 +167,7 @@ export class TransactionsConsumer {
   }
 
   private async updateTransactionStatus(
-    prisma: PrismaTransaction,
+    prisma: Prisma.TransactionClient,
     reference: string,
     status: TransferStatus,
     paidAt?: string,
@@ -189,7 +187,7 @@ export class TransactionsConsumer {
   }
 
   private async updateUserBalance(
-    prisma: PrismaTransaction,
+    prisma: Prisma.TransactionClient,
     userId: string,
     amount: number,
   ) {

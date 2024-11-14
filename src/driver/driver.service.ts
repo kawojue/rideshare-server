@@ -1,6 +1,5 @@
 import {
   Injectable,
-  HttpException,
   ConflictException,
   NotFoundException,
   ForbiddenException,
@@ -257,28 +256,12 @@ export class DriverService {
     file: Express.Multer.File,
     { landmark }: UploadProofOfAddressDTO,
   ) {
-    if (!file) {
-      throw new BadRequestException('File not found');
-    }
-
-    const fileValidation = Utils.validateFile(
-      file,
-      10 << 20,
-      'jpg',
-      'jpeg',
-      'png',
-    );
-    if (fileValidation?.status) {
-      throw new HttpException(fileValidation.message, fileValidation.status);
-    }
-
-    const { public_id, secure_url } = await this.cloudinary.upload(
-      fileValidation.file,
-      {
-        folder: 'RideShare/Verification',
-        resource_type: 'image',
-      },
-    );
+    const { public_id, secure_url } = await this.cloudinary.upload({
+      file: file,
+      maxSize: 4 << 20,
+      folder: 'RideShare/Verification',
+      mimeTypes: ['image/jpeg', 'image/jpg', 'image/png'],
+    });
 
     const data = {
       size: file.size,
@@ -374,24 +357,12 @@ export class DriverService {
     if (!isOwner) {
       const phoneNoData = Utils.normalizePhoneNumber(ownerPhoneNo);
 
-      const fileValidation = Utils.validateFile(
+      const { public_id, secure_url } = await this.cloudinary.upload({
         file,
-        10 << 20,
-        'jpg',
-        'jpeg',
-        'png',
-      );
-      if (fileValidation?.status) {
-        throw new HttpException(fileValidation.message, fileValidation.status);
-      }
-
-      const { public_id, secure_url } = await this.cloudinary.upload(
-        fileValidation.file,
-        {
-          folder: 'RideShare/Vehicle',
-          resource_type: 'image',
-        },
-      );
+        maxSize: 4 << 20,
+        folder: 'RideShare/Vehicle',
+        mimeTypes: ['image/jpeg', 'image/jpg', 'image/png'],
+      });
 
       isNotOwnerdata = {
         agreement: {
@@ -519,7 +490,7 @@ export class DriverService {
 
     if (!vehicle.isOwner && vehicle.agreementDocument) {
       // @ts-ignore
-      await this.cloudinary.delete(vehicle.agreementDocument.public_id);
+      this.cloudinary.delete(vehicle.agreementDocument.public_id);
     }
 
     if (role !== 'DRIVER') {

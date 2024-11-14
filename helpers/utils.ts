@@ -1,10 +1,12 @@
 import * as crypto from 'crypto';
+import { Request } from 'express';
+import { UAParser } from 'ua-parser-js';
 import { config } from 'configs/env.config';
 import { PrismaClient } from '@prisma/client';
 import { BadRequestException } from '@nestjs/common';
 import { parsePhoneNumber } from 'awesome-phonenumber';
-import { StatusCodes } from 'enums/statusCodes';
 
+const NodeGeocoder = require('node-geocoder');
 const { isValidPhoneNumber } = require('libphonenumber-js');
 
 export class Utils {
@@ -166,81 +168,6 @@ export class Utils {
       .join('-')}_${Math.floor(new Date().getTime() / 1000)}`;
   }
 
-  static getFileExtension(file: Express.Multer.File | string) {
-    let mimetype: string;
-
-    if (typeof file === 'object' && file.mimetype) {
-      mimetype = file.mimetype;
-    } else if (typeof file === 'string') {
-      mimetype = file;
-    }
-
-    let extension: string;
-
-    switch (mimetype) {
-      case 'video/mp4':
-        extension = 'mp4';
-        break;
-      case 'video/webm':
-        extension = 'webm';
-        break;
-      case 'video/avi':
-        extension = 'avi';
-        break;
-      case 'image/png':
-        extension = 'png';
-        break;
-      case 'image/jpeg':
-      case 'image/jpg':
-        extension = 'jpg';
-        break;
-      case 'audio/mp3':
-        extension = 'mp3';
-        break;
-      case 'audio/wav':
-        extension = 'wav';
-        break;
-      case 'audio/aac':
-        extension = 'aac';
-        break;
-      case 'audio/ogg':
-        extension = 'ogg';
-        break;
-      case 'application/pdf':
-        extension = 'pdf';
-        break;
-      case 'application/msword':
-        extension = 'doc';
-        break;
-      default:
-        break;
-    }
-
-    return extension;
-  }
-
-  static validateFile(
-    file: Express.Multer.File,
-    maxSize: number,
-    ...extensions: string[]
-  ) {
-    if (maxSize < file.size) {
-      return {
-        status: StatusCodes.PayloadTooLarge,
-        message: `${file.originalname} is too large`,
-      };
-    }
-
-    if (!extensions.includes(this.getFileExtension(file))) {
-      return {
-        status: StatusCodes.UnsupportedMediaType,
-        message: `${file.originalname} extension is not allowed`,
-      };
-    }
-
-    return { file };
-  }
-
   static calculateFees(amount: number): Fee {
     const processingFee = 15;
     let paystackFee: number;
@@ -316,5 +243,62 @@ export class Utils {
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c * 1000;
+  }
+
+  static formatIP(ip: string) {
+    const localIPs = [':1', '::1', '127.0.0.1', '0.0.0.0', '::ffff:127.0.0.1'];
+
+    if (localIPs.includes(ip.toLowerCase())) {
+      return 'localhost';
+    }
+
+    const ipv4Pattern = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+    if (ipv4Pattern.test(ip)) {
+      return ip;
+    }
+
+    const ipv4MappedIPv6Pattern = /^::ffff:(\d{1,3}\.){3}\d{1,3}$/;
+    if (ipv4MappedIPv6Pattern.test(ip)) {
+      return ip.replace(/^::ffff:/, '');
+    }
+
+    const ipv6Pattern = /^([\da-fA-F]{1,4}:){7}[\da-fA-F]{1,4}$/;
+    if (ipv6Pattern.test(ip)) {
+      return ip;
+    }
+
+    return null;
+  }
+
+  static getDeviceInfo(req: Request) {
+    const parser = new UAParser(req.headers['user-agent']).getResult();
+
+    const os = parser.os?.name;
+    const type = parser.device?.type;
+    const model = parser.device?.model;
+    const vendor = parser.device?.vendor;
+    const cpu = parser.cpu?.architecture;
+    const browser = parser.browser?.name;
+
+    return { os, model, browser, type, cpu, vendor };
+  }
+
+  static async geoLocation(address: string, throwError: boolean = true) {
+    const geoOptions = {
+      provider: 'google',
+      apiKey: config.google.apiKey,
+    };
+
+    const geocoder = await NodeGeocoder(geoOptions).geocode(address);
+
+    if (!geocoder?.length) {
+      if (throwError) {
+        throw new BadRequestException('Inavlid Address');
+      } else {
+        return null;
+      }
+    }
+
+    return geocoder[0];
   }
 }

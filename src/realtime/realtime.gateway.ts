@@ -404,7 +404,7 @@ export class RealtimeGateway
       const receiver =
         (await this.prisma.user.findUnique({
           where: { id: receiverId },
-        })) ||
+        })) ??
         (await this.prisma.modmin.findUnique({
           where: { id: receiverId },
         }));

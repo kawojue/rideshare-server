@@ -47,6 +47,8 @@ export class NotificationService {
       orderBy: { lastLoggedInAt: 'desc' },
     });
 
+    if (mobileDevices.length === 0) return;
+
     for (const { notificationToken } of mobileDevices) {
       await getMessaging().send({
         notification: { body, title },

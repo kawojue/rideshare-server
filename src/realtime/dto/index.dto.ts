@@ -5,7 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
 } from 'class-validator';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { ApiProperty } from '@nestjs/swagger';
 import { PaginationBaseDTO } from 'src/app/dto/pagination.dto';
 
@@ -36,7 +36,7 @@ export class MessageDTO {
 
 export class OnlineStatusDTO {
   @ApiProperty({
-    example: uuidv4(),
+    example: randomUUID(),
   })
   @IsUUID()
   @IsString()
@@ -46,7 +46,7 @@ export class OnlineStatusDTO {
 
 export class ReceiverDTO {
   @ApiProperty({
-    example: uuidv4(),
+    example: randomUUID(),
   })
   @IsUUID()
   @IsString()
@@ -56,7 +56,7 @@ export class ReceiverDTO {
 
 export class FetchMessagesDTO extends PaginationBaseDTO {
   @ApiProperty({
-    example: uuidv4(),
+    example: randomUUID(),
   })
   @IsUUID()
   @IsString()
@@ -66,7 +66,7 @@ export class FetchMessagesDTO extends PaginationBaseDTO {
 
 export class CallerDTO {
   @ApiProperty({
-    example: uuidv4(),
+    example: randomUUID(),
   })
   @IsUUID()
   @IsString()

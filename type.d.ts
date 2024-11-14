@@ -1,15 +1,12 @@
 type Status = 'ACTIVE' | 'SUSPENDED';
 type Roles = 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'MODERATOR';
 
-interface CloudinaryModuleOptions {
-  cloudName: string;
-  apiKey: string;
-  apiSecret: string;
-}
-
-interface FileDest {
+interface UploadOption {
+  file: Express.Multer.File | Buffer;
   folder: string;
-  resource_type: 'image' | 'video' | 'auto' | 'raw';
+  maxSize?: number;
+  public_id?: string;
+  mimeTypes?: string[];
 }
 
 interface IGenOTP {

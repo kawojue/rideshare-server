@@ -19,9 +19,9 @@ export const config = {
     secret: process.env.SESSION_SECRET,
   },
   cloudinary: {
-    apiKey: process.env.CLOUDINARY_API_KEY,
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    apiSecret: process.env.CLOUDINARY_API_SECRET,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   },
   google: {
     apiKey: process.env.GOOGLE_API_KEY,
@@ -60,6 +60,6 @@ export const config = {
     username: process.env.REDIS_USERNAME,
     password: process.env.REDIS_PASSWORD,
     port: parseInt(process.env.REDIS_PORT, 10),
-    database: parseInt(process.env.REDIS_DATABASE, 10) ?? 0,
+    database: parseInt(process.env.REDIS_DATABASE, 10) || 0,
   },
 };

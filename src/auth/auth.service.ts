@@ -8,7 +8,6 @@ import {
 } from './dto/auth.dto';
 import {
   Injectable,
-  HttpException,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
@@ -17,7 +16,6 @@ import {
 import { Queue } from 'bull';
 import { Utils } from 'helpers/utils';
 import { UAParser } from 'ua-parser-js';
-import { JwtService } from '@nestjs/jwt';
 import { TimeToMilli } from 'enums/base';
 import { isEmail } from 'class-validator';
 import { InjectQueue } from '@nestjs/bull';
@@ -39,12 +37,13 @@ export class AuthService {
   private client: OAuth2Client;
 
   constructor(
+    @InjectQueue('customer-queue')
+    private customerQueue: Queue,
     private readonly misc: MiscService,
     private readonly store: StoreService,
     private readonly event: EventEmitter2,
     private readonly prisma: PrismaService,
     private readonly cloudinary: CloudinaryService,
-    @InjectQueue('customer-queue') private customerQueue: Queue,
   ) {
     this.client = new OAuth2Client();
   }
@@ -55,12 +54,7 @@ export class AuthService {
     deviceId: string,
     notificationToken?: string,
   ) {
-    const parser = new UAParser(req.headers['user-agent']).getResult();
-
-    const os = parser.os.name;
-    const type = parser.device.type;
-    const model = parser.device.model;
-    const vendor = parser.device.vendor;
+    const { os, model, type, vendor } = Utils.getDeviceInfo(req);
 
     return this.prisma.mobileDevice.upsert({
       where: {
@@ -81,14 +75,14 @@ export class AuthService {
         model,
         type,
         vendor,
-        lastLoggedInAt: new Date(),
-        notificationToken,
         deviceId,
+        notificationToken,
+        lastLoggedInAt: new Date(),
       },
     });
   }
 
-  async setCookie(res: Response, data: Record<string, any>) {
+  setCookie(res: Response, data: Record<string, any>) {
     res.cookie('access_token', data.access_token, {
       sameSite: config.isProd ? 'none' : 'lax',
       secure: config.isProd,
@@ -179,7 +173,7 @@ export class AuthService {
         this.misc.generateRefreshToken(jwtPayload),
       ]);
 
-      await this.store.set(
+      this.store.set(
         `token_${user.id}`,
         { refresh_token },
         TimeToMilli.OneHundredTwentyDays,
@@ -244,13 +238,7 @@ export class AuthService {
       emitted = true;
     }
 
-    if (emitted) {
-      await this.store.set<IGenOTP>(
-        `totp_${identifier}`,
-        totp,
-        TimeToMilli.TenMinutes,
-      );
-    }
+    this.store.set<IGenOTP>(`totp_${identifier}`, totp, TimeToMilli.TenMinutes);
 
     return {
       identifier,
@@ -283,7 +271,7 @@ export class AuthService {
     }
 
     if (new Date() > totp.otp_expiry) {
-      await this.store.delete(`totp_${identifier}`);
+      this.store.delete(`totp_${identifier}`);
       throw new ForbiddenException('Code has expired');
     }
 
@@ -295,7 +283,7 @@ export class AuthService {
         throw new UnauthorizedException('Incorrect OTP. Max retries reached.');
       }
 
-      await this.store.set<IGenOTP>(`totp_${identifier}`, {
+      this.store.set<IGenOTP>(`totp_${identifier}`, {
         ...totp,
         count: newCount,
       });
@@ -341,7 +329,11 @@ export class AuthService {
         this.misc.generateRefreshToken(payload),
       ]);
 
-      await this.store.set(`token_${user.id}`, refresh_token);
+      this.store.set(
+        `token_${user.id}`,
+        refresh_token,
+        TimeToMilli.OneHundredTwentyDays,
+      );
 
       return { access_token, refresh_token, nextAction };
     }
@@ -420,7 +412,11 @@ export class AuthService {
       this.misc.generateRefreshToken(payload),
     ]);
 
-    await this.store.set(`token_${user.id}`, refresh_token);
+    this.store.set(
+      `token_${user.id}`,
+      refresh_token,
+      TimeToMilli.OneHundredTwentyDays,
+    );
 
     return {
       user,
@@ -492,20 +488,13 @@ export class AuthService {
   }
 
   async uploadAvatar(file: Express.Multer.File, { sub: userId }: JwtDecoded) {
-    if (!file) {
-      throw new BadRequestException('No file was selected');
-    }
-
     const profile = await this.prisma.getProfile(userId);
 
-    const validate = Utils.validateFile(file, 5 << 20, 'jpeg', 'jpg', 'png');
-    if (validate?.status) {
-      throw new HttpException(validate.message, validate.status);
-    }
-
-    const response = await this.cloudinary.upload(validate.file, {
-      folder: 'Rideshare/Profile',
-      resource_type: 'image',
+    const response = await this.cloudinary.upload({
+      file,
+      maxSize: 3 << 20,
+      folder: 'Rideshare/Profile-Pic',
+      mimeTypes: ['image/png', 'image/jpeg', 'image/jpg'],
     });
 
     const payload = {
@@ -515,14 +504,14 @@ export class AuthService {
       public_id: response.public_id,
     };
 
-    await this.prisma.profile.update({
+    this.prisma.profile.update({
       where: { id: profile.id },
       data: { avatar: payload },
     });
 
     const avatar = profile.avatar as any;
     if (avatar?.public_id) {
-      await this.cloudinary.delete(avatar.public_id);
+      this.cloudinary.delete(avatar.public_id);
     }
 
     return payload;

@@ -3,49 +3,86 @@ import {
   UploadApiResponse,
   UploadApiErrorResponse,
 } from 'cloudinary';
+import {
+  Injectable,
+  BadRequestException,
+  PayloadTooLargeException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
 import { Utils } from 'helpers/utils';
-import { ConfigService } from '@nestjs/config';
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
-
-const toStream = require('buffer-to-stream');
+import { parse } from 'file-type-mime';
+import { config } from 'configs/env.config';
+import * as toStream from 'buffer-to-stream';
 
 @Injectable()
 export class CloudinaryService {
-  constructor(private readonly configService: ConfigService) {
+  constructor() {
     cloudinary.config({
-      api_key: this.configService.get<string>('cloudinary.apiKey'),
-      cloud_name: this.configService.get<string>('cloudinary.cloudName'),
-      api_secret: this.configService.get<string>('cloudinary.apiSecret'),
+      ...config.cloudinary,
+      secure: true,
     });
   }
 
-  async upload(
-    file: Express.Multer.File | Buffer,
-    header: FileDest,
-  ): Promise<UploadApiResponse | UploadApiErrorResponse> {
-    try {
-      return new Promise((resolve, reject) => {
-        const upload = cloudinary.uploader.upload_stream(
-          {
-            ...header,
-            public_id: `${Utils.genFileName()}`,
-          },
-          (error, result) => {
-            if (error) return reject(error);
-            resolve(result);
-          },
-        );
-
-        if (Buffer.isBuffer(file)) {
-          toStream(file).pipe(upload);
-        } else {
-          toStream(file.buffer).pipe(upload);
-        }
-      });
-    } catch (err) {
-      console.error(err);
-      throw new InternalServerErrorException('Error uploading file');
+  async upload({
+    file,
+    folder,
+    maxSize,
+    public_id,
+    mimeTypes,
+  }: UploadOption): Promise<UploadApiResponse | UploadApiErrorResponse> {
+    if (!file) {
+      throw new BadRequestException('No selected file');
     }
+
+    let size: number;
+
+    if (Buffer.isBuffer(file)) {
+      size = file.length;
+    } else if (file && file.size) {
+      size = file.size;
+    } else {
+      throw new BadRequestException('Invalid input type');
+    }
+
+    if (size > maxSize) {
+      throw new PayloadTooLargeException(`File is too large`);
+    }
+
+    if (mimeTypes?.length) {
+      let mimeType: string;
+
+      if (Buffer.isBuffer(file)) {
+        const type = parse(file);
+
+        mimeType = type?.mime || '';
+      } else if (file && file.originalname) {
+        mimeType = file.mimetype;
+      }
+
+      if (!mimeTypes.includes(mimeType)) {
+        throw new UnsupportedMediaTypeException('File is not allowed');
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      const upload = cloudinary.uploader.upload_stream(
+        {
+          folder,
+          resource_type: 'auto',
+          public_id: public_id || Utils.genFileName(),
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        },
+      );
+
+      if (Buffer.isBuffer(file)) {
+        toStream(file).pipe(upload);
+      } else {
+        toStream(file.buffer).pipe(upload);
+      }
+    });
   }
 
   async delete(public_id: string) {

@@ -1,4 +1,4 @@
-import { v4 as uuid } from 'uuid';
+import { randomUUID } from 'crypto';
 import * as express from 'express';
 import * as passport from 'passport';
 import * as session from 'express-session';
@@ -23,7 +23,8 @@ async function bootstrap() {
     ],
     credentials: true,
     optionsSuccessStatus: 200,
-    methods: 'GET,POST,DELETE,PATCH,PUT,OPTIONS',
+    methods: 'GET,POST,DELETE,PATCH,PUT',
+    preflightContinue: false,
   });
 
   app.use(express.json({ limit: 7 << 20 }));
@@ -31,7 +32,7 @@ async function bootstrap() {
   app.use(
     session({
       genid: function (req) {
-        return uuid();
+        return randomUUID();
       },
       resave: false,
       saveUninitialized: false,

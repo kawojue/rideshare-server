@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { AppService } from './app.service';
 import { config } from 'configs/env.config';
-import { ConfigModule } from '@nestjs/config';
 import { ApiModule } from 'src/api/api.module';
 import { AppController } from './app.controller';
 import { AuthModule } from 'src/auth/auth.module';
@@ -18,7 +17,6 @@ import { ModminModule } from 'src/modmin/modmin.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RealtimeModule } from 'src/realtime/realtime.module';
 import { ResponseModule } from 'src/response/response.module';
-import cloudinaryConfig from 'src/cloudinary/cloudinary.config';
 import { CacheModule, CacheStore } from '@nestjs/cache-manager';
 import { AnalyticsModule } from 'src/analytics/analytics.module';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
@@ -41,9 +39,6 @@ import { NotificationModule } from 'src/notification/notification.module';
     AnalyticsModule,
     CloudinaryModule,
     NotificationModule,
-    ConfigModule.forRoot({
-      load: [cloudinaryConfig],
-    }),
     EventEmitterModule.forRoot({
       global: true,
     }),

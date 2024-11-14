@@ -1,16 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { RealtimeService } from './realtime.service';
 import { RealtimeGateway } from './realtime.gateway';
-import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 
 @Module({
-  providers: [
-    RealtimeGateway,
-    RealtimeService,
-    CloudinaryService,
-    ConfigService,
-  ],
+  imports: [CloudinaryModule],
+  providers: [RealtimeGateway, RealtimeService],
   exports: [RealtimeGateway, RealtimeService],
 })
 export class RealtimeModule {}

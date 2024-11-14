@@ -86,13 +86,11 @@ export class RealtimeService {
     const base64Data = file.replace(/^data:.*;base64,/, '');
     const { fileType, fileSize } = this.getFileMetadata(file);
 
-    const { secure_url, public_id } = await this.cloudinary.upload(
-      Buffer.from(base64Data, 'base64'),
-      {
-        folder: 'RideShare/Chat',
-        resource_type: 'auto',
-      },
-    );
+    const { secure_url, public_id } = await this.cloudinary.upload({
+      file: Buffer.from(base64Data, 'base64'),
+      maxSize: 3 << 20,
+      folder: 'RideShare/Chat',
+    });
 
     return {
       size: fileSize,
@@ -103,7 +101,7 @@ export class RealtimeService {
   }
 
   async getInbox(inboxId: string) {
-    return await this.prisma.inbox.findUnique({
+    return this.prisma.inbox.findUnique({
       where: { id: inboxId },
       include: {
         user: {
@@ -135,7 +133,7 @@ export class RealtimeService {
     receiverId: string;
     callStatus: CallStatus;
   }) {
-    return await this.prisma.callLog.create({
+    return this.prisma.callLog.create({
       data: {
         callStatus: data.callStatus,
         caller: { connect: { id: data.callerId } },
@@ -145,21 +143,21 @@ export class RealtimeService {
   }
 
   async updateCallStatus(callId: string, status: CallStatus) {
-    return await this.prisma.callLog.update({
+    return this.prisma.callLog.update({
       where: { id: callId },
       data: { callStatus: status },
     });
   }
 
   async setStartTime(callId: string) {
-    return await this.prisma.callLog.update({
+    return this.prisma.callLog.update({
       where: { id: callId },
       data: { startTime: new Date() },
     });
   }
 
   async setEndTime(callId: string) {
-    return await this.prisma.callLog.update({
+    return this.prisma.callLog.update({
       where: { id: callId },
       data: { endTime: new Date() },
     });

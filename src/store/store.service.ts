@@ -6,11 +6,11 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 export class StoreService {
   constructor(@Inject(CACHE_MANAGER) private cache: Cache) {}
 
-  async get<T>(key: string) {
+  async get<T = any>(key: string) {
     return await this.cache.get<T>(key);
   }
 
-  async set<T>(key: string, value: T, ttl?: number) {
+  async set<T = any>(key: string, value: T, ttl?: number) {
     await this.cache.set(key, value, { ...(ttl && { ttl: ttl / 1000 }) });
   }
 
@@ -18,7 +18,7 @@ export class StoreService {
     await this.cache.del(key);
   }
 
-  async has(key: string) {
+  async has(key: string): Promise<boolean> {
     const data = await this.cache.get(key);
     return !!data;
   }

@@ -1,4 +1,4 @@
-import { v4 as uuid } from 'uuid';
+import { randomUUID } from 'crypto';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
@@ -141,7 +141,7 @@ export class FetchTxHistoriesDTO extends AmountBaseDTO {
   status?: TransferStatus;
 
   @ApiProperty({
-    example: uuid(),
+    example: randomUUID(),
     required: false,
   })
   @IsString()

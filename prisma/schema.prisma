@@ -31,7 +31,6 @@ model User {
   profile      Profile?
   verification Verification?
 
-  cache                Cache[]
   vehicles             Vehicle[]
   transactionHistories TxHistory[]
   mobileDevices        MobileDevice[]
@@ -215,31 +214,6 @@ model Amenity {
   @@map("vehicle_amenities")
 }
 
-model Cache {
-  id            String    @id @default(uuid()) @db.Uuid
-  key           String    @unique
-  value         Int?
-  expires_in    String?
-  scope         String?
-  token_type    String?
-  access_token  String?
-  refresh_token String?
-  type          CacheType
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  userId   String? @map("user_id") @db.Uuid
-  modminId String? @map("modmin_id") @db.Uuid
-
-  user   User?   @relation(references: [id], fields: [userId], onDelete: Cascade)
-  modmin Modmin? @relation(references: [id], fields: [modminId], onDelete: Cascade)
-
-  @@index([access_token])
-  @@index([refresh_token])
-  @@index([createdAt, updatedAt])
-  @@map("cache")
-}
-
 model Notification {
   id        String           @id @default(uuid()) @db.Uuid
   topic     NotificationType
@@ -350,7 +324,6 @@ model Modmin {
 
   inbox Inbox?
 
-  cache              Cache[]
   withdrawalRequests WithdrwalRequest[]
   sentMessages       Message[]          @relation("ModminSentMessages")
   receivedMessages   Message[]          @relation("ModminReceivedMessages")
