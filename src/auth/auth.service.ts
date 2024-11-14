@@ -211,21 +211,17 @@ export class AuthService {
       throw new ForbiddenException('Account suspended. Contact Support!');
     }
 
-    let emitted: boolean;
-
     if (config.env === 'live') {
       if (isPhone) {
-        emitted = this.event.emit(
+        this.event.emit(
           'notification.sms',
           new CreateSmsNotificationEvent({
             phone: identifier,
             message: `OTP Code <${totp.otp}>. Rideshare`,
           }),
         );
-      }
-
-      if (!isPhone) {
-        emitted = this.event.emit(
+      } else {
+        this.event.emit(
           'notification.email',
           new CreateEmailNotificationEvent({
             emails: identifier,
@@ -234,8 +230,6 @@ export class AuthService {
           }),
         );
       }
-    } else {
-      emitted = true;
     }
 
     this.store.set<IGenOTP>(`totp_${identifier}`, totp, TimeToMilli.TenMinutes);
