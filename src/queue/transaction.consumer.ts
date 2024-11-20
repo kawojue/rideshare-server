@@ -1,10 +1,3 @@
-import {
-  User,
-  Prisma,
-  TxHistory,
-  PrismaClient,
-  TransferStatus,
-} from '@prisma/client';
 import { Job } from 'bull';
 import { Mutex } from 'async-mutex';
 import { Utils } from 'helpers/utils';
@@ -24,7 +17,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'prisma/prisma.service';
 import { StoreService } from 'src/store/store.service';
-import { DefaultArgs } from '@prisma/client/runtime/library';
+import { User, Prisma, TxHistory, TransferStatus } from '@prisma/client';
 
 @Processor('transaction-queue')
 export class TransactionsConsumer {
